@@ -161,6 +161,7 @@ export const lightTheme = {
             // Translucent tint behind the web `backdrop-filter` blur (GlassSurface webBlur
             // tier) — kept fairly transparent so the blurred content actually shows through
             // as frosted glass (too opaque reads as a flat panel over the light list).
+            // Also the unblurred Android glass tint (GlassSurface tint tier).
             webBlurTint: 'rgba(255, 255, 255, 0.5)',
         },
 
@@ -439,6 +440,7 @@ export const darkTheme = {
             panelSurface: '#221C1C',
             // Translucent tint behind the web `backdrop-filter` blur — a frosted dark
             // (≈ `surface.base` #191717), kept transparent enough to read as glass.
+            // Also the unblurred Android glass tint (GlassSurface tint tier).
             webBlurTint: 'rgba(25, 23, 23, 0.5)',
         },
 

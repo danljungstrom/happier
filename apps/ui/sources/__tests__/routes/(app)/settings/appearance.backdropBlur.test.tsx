@@ -18,8 +18,12 @@ const shared = vi.hoisted(() => ({
         avatarStyle: 'gradient',
         showFlavorIcons: true,
         preferredLanguage: null,
+        glassBlurEnabled: true,
+        glassBlurIntensity: 'regular',
     } as Record<string, unknown>,
 }));
+
+const platform = vi.hoisted(() => ({ OS: 'web' as 'web' | 'android' }));
 
 type MutableSettingHook = (key: string) => [unknown, (next: unknown) => void];
 
@@ -37,6 +41,7 @@ installSessionSettingsEntryModuleMocks({
         const { createReactNativeWebMock } = await import('@/dev/testkit/mocks/reactNative');
         return createReactNativeWebMock({
             Appearance: { getColorScheme: () => 'light' },
+            Platform: { get OS() { return platform.OS; } },
         });
     },
     unistyles: async () => {
@@ -104,6 +109,7 @@ afterEach(() => {
     standardCleanup();
     resetSessionSettingsEntryState();
     shared.settingsState.uiBackdropBlurEnabled = true;
+    platform.OS = 'web';
 });
 
 describe('Appearance settings backdrop blur', () => {
@@ -125,5 +131,30 @@ describe('Appearance settings backdrop blur', () => {
         });
 
         expect(shared.settingsState.uiBackdropBlurEnabled).toBe(false);
+    });
+});
+
+describe('Appearance settings glass intensity', () => {
+    async function renderAppearance() {
+        const mod = await import('@/app/(app)/settings/appearance');
+        return renderSettingsView(React.createElement(mod.default), {
+            flushOptions: { cycles: 0 },
+        });
+    }
+
+    it('offers the blur intensity picker where glass is a real blur', async () => {
+        const screen = await renderAppearance();
+
+        expect(screen.findAllByProps({ title: 'settingsAppearance.glass.intensity' }).length).toBeGreaterThan(0);
+    });
+
+    // Android glass is a translucent tint without blur, so an intensity choice would do nothing.
+    it('hides the blur intensity picker on Android', async () => {
+        platform.OS = 'android';
+
+        const screen = await renderAppearance();
+
+        expect(screen.findAllByProps({ title: 'settingsAppearance.glass.enable' }).length).toBeGreaterThan(0);
+        expect(screen.findAllByProps({ title: 'settingsAppearance.glass.intensity' })).toHaveLength(0);
     });
 });

@@ -32,6 +32,7 @@ import {
 import type { ThemeProfileMode, ThemeProfilesLocalStateV1 } from '@/theme/profiles/themeProfileTypes';
 import type { LocalSettings } from '@/sync/domains/settings/localSettings';
 import { Icon } from '@/components/ui/icons/Icon';
+import { isNativeBlurAvailable } from '@/components/ui/glass/blurMaterial';
 import {
     LOADING_INDICATOR_STYLE_LABEL_KEYS,
     LoadingIndicatorStylePreview,
@@ -669,7 +670,8 @@ export default React.memo(function AppearanceSettingsScreen() {
                     }
                     showChevron={false}
                 />
-                {glassBlurEnabled ? (
+                {/* Intensity only tunes a real blur; Android glass is an unblurred tint. */}
+                {glassBlurEnabled && (Platform.OS === 'web' || isNativeBlurAvailable()) ? (
                     <DropdownMenu
                         open={openGlassBlurMenu}
                         onOpenChange={setOpenGlassBlurMenu}
