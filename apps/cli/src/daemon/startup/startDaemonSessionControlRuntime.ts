@@ -6499,6 +6499,24 @@ export async function startDaemonSessionControlRuntime(
     sessionId: string,
     childRuns?: readonly Parameters<typeof isExecutionRunActive>[0][],
   ): SessionRunnerRestartDisabledReason | null => resolveSessionRunnerActivity(sessionId, childRuns)?.reasonCode ?? null;
+  // Provider-native background agents reach the daemon only through the server Runtime Activity
+  // projection. A read failure propagates so the restart owner refuses the restart (fail closed).
+  const readSessionRunnerServerRuntimeActivity = async (sessionId: string) => {
+    const tracked = findTrackedSessionByHappySessionId(params.pidToTrackedSession.values(), sessionId);
+    const attribution = tracked?.requesterWorkAttributionV1 ?? tracked?.spawnOptions?.requesterWorkAttributionV1;
+    try {
+      return await withSessionAccountContext(sessionId, async accountContext =>
+        await withSessionAccountHome(accountContext, () => fetchSessionByIdCompat({
+          token: accountContext?.bootstrap.credentials.token ?? params.credentials.token, sessionId,
+        })), attribution);
+    } catch (error) {
+      logger.warn('[DAEMON RUN] Session runner restart skipped: server runtime activity unreadable', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  };
   const waitForSessionRunnerChildTurns = async (
     sessionId: string,
     signal: AbortSignal,
@@ -18826,6 +18844,7 @@ export async function startDaemonSessionControlRuntime(
             resolveSessionRunnerActivity,
           refreshTrackedSessionRuntimeSnapshot:
             refreshTrackedSessionRuntimeSnapshotForPlannedRestart,
+          readServerRuntimeActivity: readSessionRunnerServerRuntimeActivity,
         });
       },
       handleSessionRunnerRestartAll: async (request) => {
@@ -18844,6 +18863,7 @@ export async function startDaemonSessionControlRuntime(
             resolveTrackedRunnerRuntimeCurrentness,
           refreshTrackedSessionRuntimeSnapshot:
             refreshTrackedSessionRuntimeSnapshotForPlannedRestart,
+          readServerRuntimeActivity: readSessionRunnerServerRuntimeActivity,
         });
       },
       handleSessionRunnerStatusGet: async (request) => {
@@ -20014,6 +20034,7 @@ export async function startDaemonSessionControlRuntime(
         resolveActivityDisabledReason: resolveSessionRunnerActivity,
         resolveAgentRuntimeCurrentness: resolveTrackedRunnerRuntimeCurrentness,
         refreshTrackedSessionRuntimeSnapshot: refreshTrackedSessionRuntimeSnapshotForPlannedRestart,
+        readServerRuntimeActivity: readSessionRunnerServerRuntimeActivity,
       }),
       logDebug: (message, payload) => logger.debug(message, payload),
       logWarn: (message, payload) => logger.warn(message, payload),

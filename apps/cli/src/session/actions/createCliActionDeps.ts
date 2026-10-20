@@ -7907,7 +7907,7 @@ export function createCliActionDeps(params: Readonly<{
       if (!state.success || state.data.sessionId !== sessionId || state.data.machineId !== machineId) {
         return { ok: false, status: 'unsupported_daemon', sessionId, reasonCode: 'unsupported_daemon_version' };
       }
-      const request = buildSessionRunnerRuntimeRefreshRequestV1(state.data);
+      const request = buildSessionRunnerRuntimeRefreshRequestV1(state.data, 'daemon_restart_session_runners_command');
       if ('ok' in request) return request;
       // The daemon's existing planned-restart lifecycle owns completion and deferral.
       const result = RestartSessionRunnerResultV1Schema.safeParse(await callMachineAction({ ...target,

@@ -7661,6 +7661,11 @@ encryptedUnavailable: "Zaszyfrowane dane niedostępne",
         showBannerAction: 'Pokaż baner',
         hideBannerAction: 'Ukryj baner',
     },
+    runnerRestartBackgroundWork: {
+      title: 'Praca w tle jest w toku',
+      body: ({ count }: { count: number }) => `Praca w tle jest w toku (${count}). Ponowne uruchomienie ją zatrzyma.`,
+      confirmAction: 'Zatrzymaj i uruchom ponownie',
+    },
     staleRunner: {
       banner: {
         title: "Runner sesji jest nieaktualny",

@@ -91,13 +91,13 @@ function statusResponse(state: SessionRunnerRuntimeStateV1 = replacedState) {
 }
 
 const restartCases = [
-    ['stale', () => ops.restartSessionRunnerOnCurrentRuntime({ runtimeState, serverId: home.id }), RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART],
+    ['stale', () => ops.restartSessionRunnerOnCurrentRuntime({ runtimeState, serverId: home.id, reason: 'ui_stale_runner_banner' }), RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART],
     ['provider binding', () => ops.restartSessionRunnerForProviderBindingChange({ runtimeState, serverId: home.id,
         runnerProcessIdentity: processIdentity, launchBinding, nextBindingSecurityFingerprint: 'binding-security:v1:b' }), RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART_V2],
 ] as const;
 
 describe('session runner restart op', () => {
-    it('refreshes from the public Action through the banner primitive and exact Home RPC', async () => {
+    it('refreshes from the public Action as an unconfirmed restart on the exact Home RPC', async () => {
         response = method => method === RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART
             ? { ok: true, status: 'restarted', sessionId: 's1' } : statusResponse(runtimeState);
         const { createDefaultActionExecutor } = await import('./actions/defaultActionExecutor');
@@ -107,7 +107,7 @@ describe('session runner restart op', () => {
             { surface: 'ui', authority: 'present_user', serverId: home.id, actionCaller: { kind: 'host' } });
         expect(result).toMatchObject({ ok: true, result: { ok: true, status: 'restarted', sessionId: 's1' } });
         expect(decodedRequests).toContainEqual({ method: RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART, payload: {
-            sessionId: 's1', mode: 'if_stale', reason: 'ui_stale_runner_banner', expectedRunnerPid: 123,
+            sessionId: 's1', mode: 'if_stale', reason: 'daemon_restart_session_runners_command', expectedRunnerPid: 123,
             expectedProcessCommandHash: 'hash-old', expectedRunnerEntrypointIdentity: 'runner-runtime-old',
         } });
     });
@@ -151,7 +151,7 @@ describe('session runner restart op', () => {
         response = () => new Promise(() => {});
         const controller = new AbortController();
         const pending = ops.restartSessionRunnerOnCurrentRuntime({ runtimeState, serverId: home.id,
-            signal: controller.signal });
+            reason: 'ui_stale_runner_banner', signal: controller.signal });
         let settled: unknown;
         void pending.then(value => { settled = value; }, error => { settled = error; });
         await vi.waitFor(() => expect(decodedRequests).toHaveLength(1));
@@ -226,8 +226,8 @@ describe('session runner restart op', () => {
     });
 
     it('fails closed without effects when machine, aggregate identity, or V2 process witness is absent', async () => {
-        await expect(ops.restartSessionRunnerOnCurrentRuntime({ runtimeState: { ...runtimeState, machineId: null } })).resolves.toMatchObject({ status: 'unsupported_daemon' });
-        await expect(ops.restartSessionRunnerOnCurrentRuntime({ runtimeState: { ...runtimeState, runner: { ...runtimeState.runner, runtimeId: null } } })).resolves.toMatchObject({ status: 'version_unknown' });
+        await expect(ops.restartSessionRunnerOnCurrentRuntime({ runtimeState: { ...runtimeState, machineId: null }, reason: 'ui_stale_runner_banner' })).resolves.toMatchObject({ status: 'unsupported_daemon' });
+        await expect(ops.restartSessionRunnerOnCurrentRuntime({ runtimeState: { ...runtimeState, runner: { ...runtimeState.runner, runtimeId: null } }, reason: 'ui_stale_runner_banner' })).resolves.toMatchObject({ status: 'version_unknown' });
         await expect(ops.restartSessionRunnerForProviderBindingChange({ runtimeState, runnerProcessIdentity: null })).resolves.toMatchObject({ status: 'unsupported_daemon' });
         expect(boundary.requests).toEqual([]);
     });

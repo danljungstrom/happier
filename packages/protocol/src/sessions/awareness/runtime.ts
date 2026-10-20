@@ -194,6 +194,19 @@ export function resolveSessionAwarenessLifecycleV1(
   }
 }
 
+/**
+ * Provider tasks, shells or runs are active, whether or not a foreground turn also runs. Background
+ * presentation excludes foreground work; interruption protection (runner restarts) must not.
+ */
+export function hasSessionProviderRuntimeActivityV1(input: Readonly<{
+  lifecycle: Pick<SessionLifecycleAwarenessInputV1, 'archivedAtMs'>;
+  runtime: Pick<SessionRuntimeAwarenessInputV1, 'activityState' | 'activityActiveCount'>;
+}>): boolean {
+  return normalizeAwarenessTimestampV1(input.lifecycle.archivedAtMs) === null
+    && input.runtime.activityState === 'active'
+    && normalizeAwarenessCountV1(input.runtime.activityActiveCount) > 0;
+}
+
 export function projectSessionAwarenessRuntimeV1(
   input: ProjectSessionAwarenessRuntimeV1Input,
 ): SessionAwarenessRuntimeFactsV1 {
@@ -243,9 +256,7 @@ export function projectSessionAwarenessRuntimeV1(
     || freshOptimisticPendingInput
     || (resuming && !hasTerminalPrimaryTurnProjection && !waitingForAction);
 
-  const hasProviderRuntimeActivity = !archived
-    && runtime.activityState === 'active'
-    && normalizeAwarenessCountV1(runtime.activityActiveCount) > 0;
+  const hasProviderRuntimeActivity = hasSessionProviderRuntimeActivityV1({ lifecycle, runtime });
   const backgroundActive = !working && hasProviderRuntimeActivity;
 
   const hasFreshPendingRequest = isFreshAwarenessTimestampV1(

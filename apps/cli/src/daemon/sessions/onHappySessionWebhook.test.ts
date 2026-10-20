@@ -96,7 +96,7 @@ describe('createOnHappySessionWebhook', () => {
         const state = resolveSessionRunnerRuntimeState({ sessionId, tracked, currentIdentity });
         expect(state.runner).toMatchObject({ pid: wrapperPid, runtimeId: 'version:1.2.3', startingMode: 'remote' });
         expect(state.plannedRestart).toMatchObject({ eligible: true, disabledReason: null });
-        const request = buildSessionRunnerRuntimeRefreshRequestV1(state);
+        const request = buildSessionRunnerRuntimeRefreshRequestV1(state, 'ui_stale_runner_banner');
         expect(request).toMatchObject({ expectedRunnerPid: wrapperPid,
           expectedProcessCommandHash: hashProcessCommand('/runtime/scope-exit'), expectedRunnerEntrypointIdentity: 'version:1.2.3' });
         if ('ok' in request) throw new Error('Expected guarded runner refresh');
@@ -107,7 +107,7 @@ describe('createOnHappySessionWebhook', () => {
         const changedRunner = resolveSessionRunnerRuntimeState({ sessionId, currentIdentity,
           tracked: { ...tracked, sessionRunnerPid: runnerPid + 1 } });
         expect(changedRunner.runner).toMatchObject({ runtimeId: null, startingMode: 'unknown' });
-        expect(buildSessionRunnerRuntimeRefreshRequestV1(changedRunner)).toMatchObject({
+        expect(buildSessionRunnerRuntimeRefreshRequestV1(changedRunner, 'ui_stale_runner_banner')).toMatchObject({
           ok: false, reasonCode: 'runner_entrypoint_unknown',
         });
       });

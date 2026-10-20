@@ -72,7 +72,7 @@ describe('CLI machine terminal Action', () => {
     expect(requests).toEqual([
       { method: `worker:${RPC_METHODS.DAEMON_SESSION_RUNNER_STATUS_GET}`, params: { sessionId: 'session' } },
       { method: `worker:${RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART}`, params: {
-        sessionId: 'session', mode: 'if_stale', reason: 'ui_stale_runner_banner', expectedRunnerPid: 123,
+        sessionId: 'session', mode: 'if_stale', reason: 'daemon_restart_session_runners_command', expectedRunnerPid: 123,
         expectedProcessCommandHash: 'old-command', expectedRunnerEntrypointIdentity: 'old-runtime',
       } },
     ]);

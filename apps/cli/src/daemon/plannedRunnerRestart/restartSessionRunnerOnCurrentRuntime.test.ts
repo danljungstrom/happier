@@ -508,6 +508,95 @@ describe('restartSessionRunnerOnCurrentRuntime', () => {
     expect(requestRestart).not.toHaveBeenCalled();
   });
 
+  it('does not signal an unconfirmed restart while the server projects background activity', async () => {
+    const requestRestart = vi.fn(async () => ({ signaled: true }));
+
+    const result = await restartSessionRunnerOnCurrentRuntime({
+      request: { sessionId: 'sess-1', mode: 'if_stale', reason: 'daemon_restart_session_runners_command' },
+      tracked: trackedSession(),
+      currentIdentity: currentIdentity('0.2.11'),
+      requestRestart,
+      readServerRuntimeActivity: async () => ({ runtimeActivityState: 'active', runtimeActivityActiveCount: 2 }),
+    });
+
+    expect(result).toEqual({ ok: false, status: 'busy', sessionId: 'sess-1', reasonCode: 'turn_in_progress' });
+    expect(RestartSessionRunnerResultV1Schema.parse(result)).toEqual(result);
+    expect(requestRestart).not.toHaveBeenCalled();
+  });
+
+  it('previews an unconfirmed dry run as busy while the server projects background activity', async () => {
+    const requestRestart = vi.fn(async () => ({ signaled: true }));
+
+    const result = await restartSessionRunnerOnCurrentRuntime({
+      request: { sessionId: 'sess-1', mode: 'if_stale', reason: 'daemon_restart_session_runners_command', dryRun: true },
+      tracked: trackedSession(),
+      currentIdentity: currentIdentity('0.2.11'),
+      requestRestart,
+      readServerRuntimeActivity: async () => ({ runtimeActivityState: 'active', runtimeActivityActiveCount: 1 }),
+    });
+
+    expect(result).toEqual({ ok: false, status: 'busy', sessionId: 'sess-1', reasonCode: 'turn_in_progress' });
+    expect(requestRestart).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { runtimeActivityState: 'idle' as const, runtimeActivityActiveCount: 0 },
+    { runtimeActivityState: 'unknown' as const, runtimeActivityActiveCount: 0 },
+    null,
+  ])('restarts an unconfirmed request when the server projects no background activity (%o)', async (activity) => {
+    const requestRestart = vi.fn(async () => ({ signaled: true }));
+
+    const result = await restartSessionRunnerOnCurrentRuntime({
+      request: { sessionId: 'sess-1', mode: 'if_stale', reason: 'doctor_repair' },
+      tracked: trackedSession(),
+      currentIdentity: currentIdentity('0.2.11'),
+      requestRestart,
+      readServerRuntimeActivity: async () => activity,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, status: 'restarted' }));
+    expect(requestRestart).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { sessionId: 'sess-1', mode: 'if_stale' as const, reason: 'ui_stale_runner_banner' as const },
+    providerRecoveryRequest(),
+  ])('lets a restart the app confirmed with the user through background activity (%o)', async (request) => {
+    const requestRestart = vi.fn(async () => ({ signaled: true }));
+    const readServerRuntimeActivity = vi.fn(async () => ({
+      runtimeActivityState: 'active' as const,
+      runtimeActivityActiveCount: 1,
+    }));
+
+    const result = await restartSessionRunnerOnCurrentRuntime({
+      request,
+      tracked: trackedSession(),
+      currentIdentity: currentIdentity('0.2.11'),
+      requestRestart,
+      readServerRuntimeActivity,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, status: 'restarted' }));
+    expect(readServerRuntimeActivity).not.toHaveBeenCalled();
+  });
+
+  it('does not signal an unconfirmed restart when the server activity read fails', async () => {
+    const requestRestart = vi.fn(async () => ({ signaled: true }));
+
+    const result = await restartSessionRunnerOnCurrentRuntime({
+      request: { sessionId: 'sess-1', mode: 'force_current_cli', reason: 'capability_selection_change' },
+      tracked: trackedSession(),
+      currentIdentity: currentIdentity('0.2.11'),
+      requestRestart,
+      readServerRuntimeActivity: async () => {
+        throw new Error('server unavailable');
+      },
+    });
+
+    expect(result).toEqual({ ok: false, status: 'busy', sessionId: 'sess-1', reasonCode: 'turn_in_progress' });
+    expect(requestRestart).not.toHaveBeenCalled();
+  });
+
   it.each([
     { activeTurnId: 'turn-active' },
     { reattachedInterruptedTurnId: 'turn-reattached' },

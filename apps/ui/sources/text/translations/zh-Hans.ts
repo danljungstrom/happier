@@ -7511,6 +7511,11 @@ const zhHansValues = {
         showBannerAction: '显示横幅',
         hideBannerAction: '隐藏横幅',
     },
+    runnerRestartBackgroundWork: {
+      title: '后台任务正在运行',
+      body: ({ count }: { count: number }) => `${count} 个后台任务正在运行。重启将停止它们。`,
+      confirmAction: '停止并重启',
+    },
     staleRunner: {
       banner: {
         title: "会话运行器已过期",

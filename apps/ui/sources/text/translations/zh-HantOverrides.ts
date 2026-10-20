@@ -6474,6 +6474,11 @@ const zhHantOverrides: DeepPartial<typeof zhHans> = {
               showBannerAction: '顯示橫幅',
               hideBannerAction: '隱藏橫幅',
           },
+          runnerRestartBackgroundWork: {
+            title: '背景工作正在執行',
+            body: ({ count }: { count: number }) => `${count} 個背景工作正在執行。重新啟動將停止這些工作。`,
+            confirmAction: '停止並重新啟動',
+          },
           staleRunner: {
             banner: {
               title: '工作階段執行器已過期',

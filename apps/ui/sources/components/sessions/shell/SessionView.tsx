@@ -462,6 +462,7 @@ import {
     restartSessionRunnerForProviderBindingChange,
     restartSessionRunnerOnCurrentRuntime,
 } from '@/sync/ops/sessionRunnerRestart';
+import { confirmRunnerRestartStopsBackgroundWork } from './confirmRunnerRestartStopsBackgroundWork';
 import {
     readSessionWorkStateFromMetadata,
 } from '@/sync/domains/session/workState/readSessionWorkState';
@@ -4677,6 +4678,8 @@ function SessionViewLoadedContent({
             return;
         }
         if (!staleSessionRunnerRuntimeState || !staleSessionRunnerPresentation) return;
+        if (!(await confirmRunnerRestartStopsBackgroundWork(staleSessionRunnerRuntimeState.sessionId))) return;
+        if (sessionViewCaller.signal.aborted) return;
         setStaleSessionRunnerOperationStatus({
             fingerprint: staleSessionRunnerPresentation.fingerprint,
             status: { kind: 'pending' },
@@ -4686,6 +4689,7 @@ function SessionViewLoadedContent({
             result = await restartSessionRunnerOnCurrentRuntime({
                 runtimeState: staleSessionRunnerRuntimeState,
                 serverId: sessionRouteServerId,
+                reason: 'ui_stale_runner_banner',
                 signal: sessionViewCaller.signal,
             });
         } catch (error) {
@@ -8222,6 +8226,7 @@ function SessionViewLoadedContent({
                     }
                     return false;
                 }
+                if (!(await confirmRunnerRestartStopsBackgroundWork(sessionId)) || sessionViewCaller.signal.aborted) return false;
                 const exactBindingChange = providerBindingStatus.status?.status === 'changed'
                     ? providerBindingStatus.status
                     : null;

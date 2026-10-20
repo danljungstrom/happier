@@ -7932,6 +7932,11 @@ encryptedUnavailable: "Detalhes encriptados indisponíveis",
         showBannerAction: 'Mostrar aviso',
         hideBannerAction: 'Ocultar aviso',
     },
+    runnerRestartBackgroundWork: {
+      title: 'Há trabalho em segundo plano em execução',
+      body: ({ count }: { count: number }) => `Há trabalho em segundo plano em execução (${count}). Reiniciar irá interrompê-lo.`,
+      confirmAction: 'Parar e reiniciar',
+    },
     staleRunner: {
       banner: {
         title: "O runner da sessão está desatualizado",

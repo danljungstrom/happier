@@ -215,6 +215,7 @@ const getSessionRunnerRuntimeStatusSpy = vi.hoisted(() =>
 );
 const actionExecuteSpy = vi.hoisted(() => vi.fn<(...input: unknown[]) => void>());
 const modalAlertSpy = vi.hoisted(() => vi.fn());
+const modalConfirmSpy = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => false));
 const chatListPropsSpy = vi.hoisted(() => vi.fn());
 const chatHeaderPropsSpy = vi.hoisted(() => vi.fn());
 const voiceSurfacePropsSpy = vi.hoisted(() => vi.fn());
@@ -408,6 +409,7 @@ installSessionShellCommonModuleMocks({
     const { createModalModuleMock } = await import('@/dev/testkit/mocks/modal');
     const modalMock = createModalModuleMock();
     modalMock.spies.alert.mockImplementation((...args) => modalAlertSpy(...args));
+    modalMock.spies.confirm.mockImplementation((...args) => modalConfirmSpy(...args));
     return modalMock.module;
   },
 });
@@ -1987,6 +1989,8 @@ describe('SessionView (direct sessions)', () => {
     settingsState.current = {};
     settingByKeyState.current = {};
     modalAlertSpy.mockReset();
+    modalConfirmSpy.mockReset();
+    modalConfirmSpy.mockResolvedValue(false);
     actionExecuteSpy.mockReset();
     modelTransitionReply = undefined;
     syncSubmitMessageSpy.mockReset();
@@ -2288,6 +2292,7 @@ describe('SessionView (direct sessions)', () => {
     expect(restartStaleSessionRunnerSpy).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
       serverId: 'server-route-1',
+      reason: 'ui_stale_runner_banner',
       runtimeState: expect.objectContaining({
         sessionId: 's1',
         machineId: 'machine-1',
@@ -2428,6 +2433,7 @@ describe('SessionView (direct sessions)', () => {
     expect(restartStaleSessionRunnerSpy).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
       serverId: 'server-route-1',
+      reason: 'ui_stale_runner_banner',
       runtimeState: expect.objectContaining({
         sessionId: 's1',
         machineId: 'machine-1',
@@ -2518,6 +2524,87 @@ describe('SessionView (direct sessions)', () => {
 
     expect(restartStaleSessionRunnerSpy).not.toHaveBeenCalled();
     expect(screen.findByTestId('session-staleRunner-version')).toBeTruthy();
+  });
+
+  function installBackgroundActivity(count: number) {
+    storageState.sessions.s1 = {
+      ...storageState.sessions.s1,
+      active: true,
+      presence: 'online',
+      thinking: false,
+      latestTurnStatus: 'completed',
+      activeAt: Date.now(),
+      runtimeActivityState: 'active',
+      runtimeActivityActiveCount: count,
+      runtimeActivityObservedAt: Date.now(),
+      runtimeActivityRevision: 1,
+    };
+  }
+
+  it('asks before a stale-runner restart stops background agents and sends nothing on cancel', async () => {
+    installStaleSessionRunnerStatus();
+    installBackgroundActivity(2);
+
+    const screen = await renderSessionViewAndSettle({ routeServerId: 'server-route-1' });
+    await pressTestInstanceAsync(screen.findByTestId('session-staleRunner-restart'));
+    await settleDirectSessionView();
+
+    expect(modalConfirmSpy).toHaveBeenCalledTimes(1);
+    expect(modalConfirmSpy.mock.calls[0]?.[1]).toBe('session.runnerRestartBackgroundWork.body');
+    expect(restartStaleSessionRunnerSpy).not.toHaveBeenCalled();
+    expect(screen.findByTestId('session-staleRunner-version')).toBeTruthy();
+  });
+
+  it('still asks before a stale-runner restart when foreground and background work coexist', async () => {
+    installStaleSessionRunnerStatus();
+    installBackgroundActivity(2);
+    storageState.sessions.s1 = {
+      ...storageState.sessions.s1,
+      latestTurnStatus: 'in_progress',
+      latestTurnStatusObservedAt: Date.now(),
+    };
+
+    const screen = await renderSessionViewAndSettle({ routeServerId: 'server-route-1' });
+    await pressTestInstanceAsync(screen.findByTestId('session-staleRunner-restart'));
+    await settleDirectSessionView();
+
+    expect(modalConfirmSpy).toHaveBeenCalledTimes(1);
+    expect(restartStaleSessionRunnerSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends one stale-runner restart after the background-agent stop is confirmed, however often it is pressed', async () => {
+    installStaleSessionRunnerStatus();
+    installBackgroundActivity(1);
+    let confirmStop: (value: boolean) => void = () => {};
+    modalConfirmSpy.mockImplementationOnce(() => new Promise<boolean>((resolve) => { confirmStop = resolve; }));
+
+    const screen = await renderSessionViewAndSettle({ routeServerId: 'server-route-1' });
+    await pressTestInstanceAsync(screen.findByTestId('session-staleRunner-restart'));
+    await pressTestInstanceAsync(screen.findByTestId('session-staleRunner-restart'));
+    expect(restartStaleSessionRunnerSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      confirmStop(true);
+    });
+    await settleDirectSessionView();
+
+    expect(modalConfirmSpy).toHaveBeenCalledTimes(1);
+    expect(restartStaleSessionRunnerSpy).toHaveBeenCalledTimes(1);
+    expect(restartStaleSessionRunnerSpy).toHaveBeenCalledWith(expect.objectContaining({
+      serverId: 'server-route-1',
+      runtimeState: expect.objectContaining({ sessionId: 's1', machineId: 'machine-1' }),
+    }));
+  });
+
+  it('restarts the stale runner without asking when no background agents run', async () => {
+    installStaleSessionRunnerStatus();
+
+    const screen = await renderSessionViewAndSettle({ routeServerId: 'server-route-1' });
+    await pressTestInstanceAsync(screen.findByTestId('session-staleRunner-restart'));
+    await settleDirectSessionView();
+
+    expect(modalConfirmSpy).not.toHaveBeenCalled();
+    expect(restartStaleSessionRunnerSpy).toHaveBeenCalledTimes(1);
   });
 
   it('dismisses the stale-runner notice when restart reports already current', async () => {
@@ -5096,6 +5183,70 @@ describe('SessionView (direct sessions)', () => {
       runnerProcessIdentity: { pid: 123, processStartTimeMs: 1_000 },
       serverId: 'server-route-1',
     });
+  });
+
+  it('asks before the armed Provider runner recovery stops background agents', async () => {
+    const { directSessionV1: _direct, ...metadata } = storageState.sessions.s1.metadata;
+    storageState.sessions.s1 = { ...storageState.sessions.s1, metadata };
+    featureEnabledState.providers = true;
+    const requestedSelection = {
+      agentTargetKey: 'agent:happier.agent.codex/codex',
+      providerConnectionId: ProviderConnectionIdSchema.parse('pc_work'),
+      modelId: 'provider-model',
+    };
+    modelTransitionReply = async () => SessionModelTransitionResultV1Schema.parse({
+      ok: false,
+      status: 'restart_required',
+      activeSelection: { agentTargetKey: 'agent:happier.agent.codex/codex', providerConnectionId: null, modelId: 'default' },
+      requestedSelection,
+    });
+    getSessionRunnerRuntimeStatusSpy.mockResolvedValue({
+      state: {
+        v: 1,
+        sessionId: 's1',
+        machineId: 'machine-1',
+        observedAtMs: 1,
+        runner: {
+          pid: 123,
+          runtimeId: 'version:cli-current',
+          processCommandHash: 'hash-current',
+          entrypointVersion: 'cli-current',
+          entrypointSource: 'process_command',
+          startedBy: 'daemon',
+          startingMode: 'remote',
+        },
+        daemon: { currentEntrypointVersion: 'version:cli-current', currentEntrypointSource: 'launch_spec' },
+        versionState: 'current',
+        statusSource: 'daemon_tracking',
+        plannedRestart: { supported: true, eligible: true },
+      },
+      runnerProcessIdentity: { pid: 123, processStartTimeMs: 1_000 },
+    });
+
+    const screen = await renderSessionViewAndSettle({ routeServerId: 'server-route-1' });
+    const modelContentOverride = await mountSessionModelPicker(screen);
+    await act(async () => {
+      modelContentOverride.props.onSelect(requestedSelection);
+      await Promise.resolve();
+    });
+    await settleDirectSessionView();
+    expect(findAgentInput(screen).props.armedRouteContinuation).toBeTruthy();
+    // Report background agents through the live store the confirmation reads at press time.
+    await act(async () => {
+      storage.setState(state => ({ sessions: { ...state.sessions, s1: { ...state.sessions.s1,
+        thinking: false, latestTurnStatus: 'completed', runtimeActivityState: 'active',
+        runtimeActivityActiveCount: 1, runtimeActivityObservedAt: Date.now(), runtimeActivityRevision: 1 } } }));
+    });
+
+    await act(async () => { findAgentInput(screen).props.onChangeText('Continue on this route'); });
+    await act(async () => { await findAgentInput(screen).props.onSend(); });
+    expect(modalConfirmSpy).toHaveBeenCalledTimes(1);
+    expect(restartProviderBindingSessionRunnerSpy).not.toHaveBeenCalled();
+
+    modalConfirmSpy.mockResolvedValueOnce(true);
+    await act(async () => { findAgentInput(screen).props.onChangeText('Continue on this route'); });
+    await act(async () => { await findAgentInput(screen).props.onSend(); });
+    expect(restartProviderBindingSessionRunnerSpy).toHaveBeenCalledTimes(1);
   });
 
   it('never reuses a cached Provider restart target after the control machine changes', async () => {

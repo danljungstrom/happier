@@ -8205,6 +8205,11 @@ encryptedUnavailable: "Зашифрованные данные недоступ�
         showBannerAction: 'Показать баннер',
         hideBannerAction: 'Скрыть баннер',
     },
+    runnerRestartBackgroundWork: {
+      title: 'Выполняется фоновая работа',
+      body: ({ count }: { count: number }) => `Фоновых задач в работе: ${count}. Перезапуск остановит их.`,
+      confirmAction: 'Остановить и перезапустить',
+    },
     staleRunner: {
       banner: {
         title: "Раннер сеанса устарел",

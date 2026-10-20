@@ -7085,6 +7085,11 @@ encryptedUnavailable: "Detalls xifrats no disponibles",
             showBannerAction: 'Mostra el bàner',
             hideBannerAction: 'Amaga el bàner',
         },
+        runnerRestartBackgroundWork: {
+            title: 'Hi ha feina en segon pla en execució',
+            body: ({ count }: { count: number }) => `Hi ha feina en segon pla en execució (${count}). Reiniciar l’aturarà.`,
+            confirmAction: 'Atura i reinicia',
+        },
         staleRunner: {
             banner: {
                 title: 'L’executor de la sessió no està actualitzat',

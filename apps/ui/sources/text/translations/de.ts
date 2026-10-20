@@ -7807,6 +7807,11 @@ encryptedUnavailable: "Verschlüsselte Details nicht verfügbar",
             showBannerAction: 'Banner zeigen',
             hideBannerAction: 'Banner ausblenden',
         },
+        runnerRestartBackgroundWork: {
+            title: 'Im Hintergrund läuft Arbeit',
+            body: ({ count }: { count: number }) => `Im Hintergrund läuft Arbeit (${count}). Ein Neustart beendet sie.`,
+            confirmAction: 'Beenden und neu starten',
+        },
         staleRunner: {
             banner: {
                 title: 'Der Session-Runner ist veraltet',

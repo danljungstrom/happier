@@ -1992,7 +1992,7 @@ type UiProtocolActionExecutor = Pick<ReturnType<typeof createActionExecutor>, 'p
       if (!runtimeState || runtimeState.machineId !== machineId) {
         return { ok: false, status: 'unsupported_daemon', sessionId, reasonCode: 'unsupported_daemon_version' } as const;
       }
-      return await restartSessionRunnerOnCurrentRuntime({ runtimeState, serverId, signal });
+      return await restartSessionRunnerOnCurrentRuntime({ runtimeState, serverId, signal, reason: 'daemon_restart_session_runners_command' });
     }),
 
     sessionStop: async ({ sessionId, serverId, signal }) =>

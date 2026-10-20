@@ -136,11 +136,22 @@ export function readSessionRunnerRestartIdentityGuardV1(runtimeState: SessionRun
   return { expectedRunnerPid: runtimeState.runner.pid, expectedProcessCommandHash, expectedRunnerEntrypointIdentity };
 }
 
-export function buildSessionRunnerRuntimeRefreshRequestV1(runtimeState: SessionRunnerRuntimeStateV1): RestartSessionRunnerRequestV1 | RestartSessionRunnerResultV1 {
+/**
+ * The banner asks the user before stopping background agents. The public Action has no such
+ * prompt, so it sends the unattended command reason and the daemon checks Runtime Activity first.
+ * V1 stays predecessor-exact, so the Action reuses an existing reason rather than adding one.
+ */
+export type SessionRunnerRuntimeRefreshReasonV1 = Extract<SessionRunnerRestartReasonV1,
+  'ui_stale_runner_banner' | 'daemon_restart_session_runners_command'>;
+
+export function buildSessionRunnerRuntimeRefreshRequestV1(
+  runtimeState: SessionRunnerRuntimeStateV1,
+  reason: SessionRunnerRuntimeRefreshReasonV1,
+): RestartSessionRunnerRequestV1 | RestartSessionRunnerResultV1 {
   const guard = readSessionRunnerRestartIdentityGuardV1(runtimeState);
   if ('ok' in guard) return guard;
   return RestartSessionRunnerRequestV1Schema.parse({ sessionId: runtimeState.sessionId,
-    mode: 'if_stale', reason: 'ui_stale_runner_banner', ...guard });
+    mode: 'if_stale', reason, ...guard });
 }
 
 export const RestartAllSessionRunnersRequestV1Schema = lazyZodSchema(() => z.strictObject({

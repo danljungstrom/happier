@@ -7823,6 +7823,11 @@ encryptedUnavailable: "Detalles cifrados no disponibles",
         showBannerAction: 'Mostrar aviso',
         hideBannerAction: 'Ocultar aviso',
     },
+    runnerRestartBackgroundWork: {
+      title: 'Hay trabajo en segundo plano en ejecución',
+      body: ({ count }: { count: number }) => `Hay trabajo en segundo plano en ejecución (${count}). Reiniciar lo detendrá.`,
+      confirmAction: 'Detener y reiniciar',
+    },
     staleRunner: {
       banner: {
         title: "El runner de la sesión no está actualizado",

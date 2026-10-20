@@ -8131,6 +8131,11 @@ localTailscale: {
         showBannerAction: 'バナーを表示',
         hideBannerAction: 'バナーを非表示',
     },
+    runnerRestartBackgroundWork: {
+      title: 'バックグラウンドで処理が実行中です',
+      body: ({ count }: { count: number }) => `バックグラウンドの処理が${count}件実行中です。再起動すると停止します。`,
+      confirmAction: '停止して再起動',
+    },
     staleRunner: {
       banner: {
         title: "セッションランナーが古くなっています",

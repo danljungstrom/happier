@@ -8048,6 +8048,11 @@ encryptedUnavailable: "Dettagli crittografati non disponibili",
         showBannerAction: 'Mostra banner',
         hideBannerAction: 'Nascondi banner',
     },
+    runnerRestartBackgroundWork: {
+      title: 'Lavoro in background in corso',
+      body: ({ count }: { count: number }) => `È in corso del lavoro in background (${count}). Il riavvio lo interromperà.`,
+      confirmAction: 'Interrompi e riavvia',
+    },
     staleRunner: {
       banner: {
         title: "Il runner della sessione non è aggiornato",

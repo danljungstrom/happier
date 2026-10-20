@@ -45,6 +45,18 @@ describe('startup stale-runner refresh', () => {
     ]);
     expect(kill.mock.calls).toEqual([[401, 'SIGTERM']]);
   });
+  it('leaves a stale runner alone while the server projects background agents', async () => {
+    const { input, kill } = fixture();
+    const restart = input.restart;
+    const outcome = await restartStaleRunnersAfterDaemonStart({ ...input,
+      restart: () => ({ ...restart(),
+        readServerRuntimeActivity: async (sessionId: string) => sessionId === 'idle'
+          ? { runtimeActivityState: 'active' as const, runtimeActivityActiveCount: 1 } : null }) });
+    if (outcome.status !== 'completed') throw new Error('startup pass did not complete');
+    expect(outcome.result.results.find(entry => entry.sessionId === 'idle'))
+      .toMatchObject({ status: 'busy', reasonCode: 'turn_in_progress' });
+    expect(kill).not.toHaveBeenCalledWith(401, 'SIGTERM');
+  });
   it.each([undefined, false])('is disabled unless the setting is explicitly true (%s)', async enabled => {
     const { input, kill } = fixture();
     expect(await restartStaleRunnersAfterDaemonStart({ ...input, readSettings: async () => ({ restartSessionRunnersOnUpdate: enabled }) })).toEqual({ status: 'disabled' });

@@ -1,4 +1,4 @@
-import { buildSessionRunnerRuntimeRefreshRequestV1, readSessionRunnerRestartIdentityGuardV1, RestartSessionRunnerResultV1Schema, type RestartSessionRunnerResultV1 } from '@happier-dev/protocol/sessions/control/sessionRunnerRestartV1';
+import { buildSessionRunnerRuntimeRefreshRequestV1, readSessionRunnerRestartIdentityGuardV1, RestartSessionRunnerResultV1Schema, type RestartSessionRunnerResultV1, type SessionRunnerRuntimeRefreshReasonV1 } from '@happier-dev/protocol/sessions/control/sessionRunnerRestartV1';
 import { RestartSessionRunnerRequestV2Schema } from '@happier-dev/protocol/sessions/control/sessionRunnerRestartV2';
 import { SessionProviderBindingSecurityChangeConfirmationV1Schema, type SessionProviderBindingMetadataV1 } from '@happier-dev/protocol/providers/sessions/bindingMetadataV1';
 import { SessionRunnerRuntimeStateV1Schema, SessionRunnerStatusGetRequestV1Schema, type SessionRunnerRuntimeStateV1, type SessionRunnerStatusGetRequestV1 } from '@happier-dev/protocol/sessions/control/sessionRunnerRuntimeV1';
@@ -168,9 +168,9 @@ async function sendSessionRunnerRestartRequest<Request>(input: RestartSessionRun
 }
 
 export async function restartSessionRunnerOnCurrentRuntime(
-    input: RestartSessionRunnerInput,
+    input: RestartSessionRunnerInput & Readonly<{ reason: SessionRunnerRuntimeRefreshReasonV1 }>,
 ): Promise<RestartSessionRunnerResultV1> {
-    const request = buildSessionRunnerRuntimeRefreshRequestV1(input.runtimeState);
+    const request = buildSessionRunnerRuntimeRefreshRequestV1(input.runtimeState, input.reason);
     if ('ok' in request) return request;
     return await sendSessionRunnerRestartRequest({ ...input,
         method: RPC_METHODS.DAEMON_SESSION_RUNNER_RESTART, request, reconcileMode: 'if_stale' });

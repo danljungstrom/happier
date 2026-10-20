@@ -2,6 +2,7 @@ import type { TrackedSession } from '@/daemon/types';
 import type { SpawnSessionOptions } from '@/session/shared/spawnSessionContract';
 import type {
   SessionRunnerRestartDisabledReason,
+  SessionRuntimeActivityState,
 } from '@happier-dev/protocol';
 
 import type { SessionRunnerEntrypointIdentity } from '../sessionRunnerRuntime/types';
@@ -49,6 +50,11 @@ type ResolveAgentRuntimeCurrentness = (
   tracked: TrackedSession,
 ) => Promise<SessionRunnerAgentRuntimeCurrentness>;
 type ResolveCurrentIdentity = () => SessionRunnerEntrypointIdentity;
+type ServerRuntimeActivity = Readonly<{
+  runtimeActivityState?: SessionRuntimeActivityState | null;
+  runtimeActivityActiveCount?: number | null;
+}>;
+type ReadServerRuntimeActivity = (sessionId: string) => Promise<ServerRuntimeActivity | null>;
 type RefreshTrackedSessionRuntimeSnapshot = (input: Readonly<{
   sessionId: string;
   tracked: TrackedSession;
@@ -75,6 +81,7 @@ type RestartSessionRunnerOnCurrentRuntimeInput = Readonly<{
   resolveActivityDisabledReason?: ResolveActivityDisabledReason;
   resolveAgentRuntimeCurrentness?: ResolveAgentRuntimeCurrentness;
   refreshTrackedSessionRuntimeSnapshot?: RefreshTrackedSessionRuntimeSnapshot;
+  readServerRuntimeActivity?: ReadServerRuntimeActivity;
 }>;
 
 export type RestartSessionRunnerCompletion =
@@ -255,6 +262,32 @@ function resolveActivityRefusal(
   return typeof activity === 'string' ? { reasonCode: activity } : activity;
 }
 
+// The app asks the user before sending these reasons while background agents run, so only
+// unconfirmed restarts (daemon/CLI/doctor/self-update/startup/capability passes and the
+// public `session.runtime.refresh` Action, which sends the command reason) consult the server.
+const USER_CONFIRMED_RESTART_REASONS: ReadonlySet<RestartSessionRunnerRequest['reason']> = new Set([
+  'ui_stale_runner_banner',
+  'provider_binding_change_recovery',
+]);
+
+/**
+ * Provider-native background agents and shells are invisible to the daemon's turn and child-run
+ * tracking; the server Runtime Activity projection is the only owner that sees them. An unreadable
+ * projection blocks the restart: a skipped restart stays recoverable, killed background work does not.
+ * Absent or `unknown` projections allow the restart because older runners never report activity.
+ */
+async function hasServerProjectedBackgroundActivity(
+  sessionId: string,
+  readServerRuntimeActivity: ReadServerRuntimeActivity,
+): Promise<boolean> {
+  try {
+    const activity = await readServerRuntimeActivity(sessionId);
+    return activity?.runtimeActivityState === 'active' && (activity.runtimeActivityActiveCount ?? 0) > 0;
+  } catch {
+    return true;
+  }
+}
+
 function busy(sessionId: string, activity: SessionRunnerActivityRefusal): RestartSessionRunnerResult {
   return { ...skipped('busy', sessionId, activity.reasonCode),
     ...(activity.diagnostics ? { diagnostics: activity.diagnostics } : {}) };
@@ -420,6 +453,13 @@ async function restartSessionRunnerOnCurrentRuntimeImpl(
   const activityRefusal = resolveActivityRefusal(tracked, sessionId, input.resolveActivityDisabledReason);
   if (activityRefusal) {
     return busy(sessionId, activityRefusal);
+  }
+  if (
+    input.readServerRuntimeActivity
+    && !USER_CONFIRMED_RESTART_REASONS.has(input.request.reason)
+    && await hasServerProjectedBackgroundActivity(sessionId, input.readServerRuntimeActivity)
+  ) {
+    return skipped('busy', sessionId, 'turn_in_progress');
   }
 
   if ('dryRun' in input.request && input.request.dryRun === true) {
@@ -636,6 +676,7 @@ export async function restartAllSessionRunnersOnCurrentRuntime(input: Readonly<{
     tracked: TrackedSession,
   ) => Promise<SessionRunnerAgentRuntimeCurrentness>;
   refreshTrackedSessionRuntimeSnapshot?: RefreshTrackedSessionRuntimeSnapshot;
+  readServerRuntimeActivity?: ReadServerRuntimeActivity;
   shouldContinue?: () => boolean;
 }>): Promise<RestartAllSessionRunnersResult> {
   const results: RestartSessionRunnerResult[] = [];
@@ -682,6 +723,7 @@ export async function restartAllSessionRunnersOnCurrentRuntime(input: Readonly<{
       ...(input.refreshTrackedSessionRuntimeSnapshot
         ? { refreshTrackedSessionRuntimeSnapshot: input.refreshTrackedSessionRuntimeSnapshot }
         : {}),
+      ...(input.readServerRuntimeActivity ? { readServerRuntimeActivity: input.readServerRuntimeActivity } : {}),
     }));
   }
 
