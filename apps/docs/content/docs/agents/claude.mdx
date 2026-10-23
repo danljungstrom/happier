@@ -37,7 +37,8 @@ can take a few extra seconds.
 Idle time counts from the end of the last turn. A session is never stopped
 while a turn, a permission request, or a background task or agent is still
 running, or after Claude scheduled its own follow-up (a session cron or `/loop`
-wakeup). Unified terminal sessions are not affected.
+wakeup). Sessions with file checkpointing enabled and unified terminal sessions
+are not affected.
 
 To change the idle time, set `HAPPIER_CLAUDE_REMOTE_IDLE_EXIT_MS` (milliseconds)
 in the Happier CLI/daemon environment (up to about 24 days). `0` turns idle shutdown off.

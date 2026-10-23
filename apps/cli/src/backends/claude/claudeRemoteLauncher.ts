@@ -1530,6 +1530,9 @@ export async function claudeRemoteLauncher(
                     const next = waitForNextBatch();
                     const idleExitMs = configuration.claudeRemoteIdleExitMs;
                     if (idleExitMs <= 0 || !launchDeliveredPrompt || activeRuntimeModeKind === 'unifiedTerminal') return next;
+                    // `/checkpoints` and `/rewind` read checkpoint ids held only by the running Agent SDK
+                    // runner; a restart would forget them.
+                    if (mode?.claudeRemoteEnableFileCheckpointing === true) return next;
                     // The Agent SDK pump asks for the next prompt while a turn is still running, so
                     // idle time is measured from the last observed activity, not from this call.
                     let lastBusyAtMs = Date.now();

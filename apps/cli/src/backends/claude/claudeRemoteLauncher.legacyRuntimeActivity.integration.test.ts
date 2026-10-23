@@ -1035,6 +1035,25 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
       }
     }, 30_000);
 
+    it('keeps the provider child alive while file checkpoints exist only in that runner', async () => {
+      const { session, switchHandlerReady } = createHarness();
+      markCanonicalTurnIdle(session);
+      const launches = recordLaunches();
+      session.queue.push('edit with checkpoints', { ...agentSdkMode, claudeRemoteEnableFileCheckpointing: true },
+        { userMessageLocalId: 'checkpoint-first' });
+
+      const launcher = claudeRemoteLauncher(session);
+      const switchHandler = await switchHandlerReady;
+      try {
+        await vi.waitFor(() => expect(launches[0]?.firstMessage).toBe('edit with checkpoints'));
+        await new Promise<void>((resolve) => setTimeout(resolve, idleExitMs * 6));
+        expect(launches).toHaveLength(1);
+        expect(launches[0]?.idleNext).toBe('pending');
+      } finally {
+        await Promise.all([Promise.resolve(switchHandler({ to: 'local' })), session.cleanup(), launcher]);
+      }
+    }, 30_000);
+
     it('keeps the provider child alive after Claude scheduled its own wakeup', async () => {
       const { session, switchHandlerReady } = createHarness();
       markCanonicalTurnIdle(session);
