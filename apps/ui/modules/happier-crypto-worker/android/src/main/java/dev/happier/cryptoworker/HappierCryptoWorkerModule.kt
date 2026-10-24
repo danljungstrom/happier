@@ -24,6 +24,10 @@ class HappierCryptoWorkerModule : Module() {
       return@AsyncFunction HappierCryptoWorker.decryptSecretboxJsonBatch(items)
     }.runOnQueue(Queues.DEFAULT)
 
+    AsyncFunction("sha256File") { fileUri: String ->
+      return@AsyncFunction HappierCryptoWorkerFileHash.sha256File(fileUri)
+    }.runOnQueue(Queues.DEFAULT)
+
     AsyncFunction("decryptAesGcmJsonBatch") { items: List<Map<String, String>> ->
       return@AsyncFunction HappierCryptoWorker.decryptAesGcmJsonBatch(items)
     }.runOnQueue(Queues.DEFAULT)
