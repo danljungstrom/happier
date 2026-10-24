@@ -106,7 +106,8 @@ async function sha256FileHex(
   if (!native) return sha256FileHexInJs(file, signal, onHashed);
   throwIfAborted(signal);
   // One native call per file, so verification reports no intermediate bytes; the file counts as
-  // verified once its hash matches.
+  // verified once its hash matches. Native hashing is short even for the largest files,
+  // so cancellation is honored once it returns.
   const hex = await native.sha256File(file.uri);
   throwIfAborted(signal);
   return hex.toLowerCase();

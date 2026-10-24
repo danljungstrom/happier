@@ -215,6 +215,16 @@ describe('native model pack file downloads', () => {
     expect(harness.files.has(harness.metaUri)).toBe(false);
   });
 
+  it('fails the install and removes the file when native hashing fails', async () => {
+    const harness = await createHarness();
+    const hashError = new Error('native_hash_failed');
+    nativeBoundary.cryptoWorker = { sha256File: async () => { throw hashError; } };
+    await expect(harness.install(new AbortController().signal)).rejects.toBe(hashError);
+    expect(harness.jsHashReads.count).toBe(0);
+    expect(harness.files.has(harness.fileUri)).toBe(false);
+    expect(harness.files.has(harness.metaUri)).toBe(false);
+  });
+
   it('rejects a non-success HTTP result and removes the native-downloaded file', async () => {
     const harness = await createHarness({ status: 404 });
     await expect(harness.install(new AbortController().signal)).rejects.toThrow('model_pack_download_failed:404');
