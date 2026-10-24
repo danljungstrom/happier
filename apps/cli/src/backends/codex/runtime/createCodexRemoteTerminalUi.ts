@@ -39,6 +39,8 @@ export function createCodexRemoteTerminalUi(params: {
     let inkUi: CodexInkUi | null = null;
     let inkUiLoad: Promise<CodexInkUi> | null = null;
     let inkRequested = false;
+    // An unmount drains stdin, then restores cooked mode and pauses it; a remount must not render until that finishes.
+    let unmountInFlight: Promise<void> | null = null;
 
     const renderRemoteUi = (ui: CodexInkUi) => ui.React.createElement(ui.CodexTerminalDisplay, {
         messageBuffer: params.messageBuffer,
@@ -64,19 +66,19 @@ export function createCodexRemoteTerminalUi(params: {
         }
         if (surface !== 'ink' || !params.hasTTY) return;
         inkRequested = true;
-        if (inkUi) {
+        if (inkUi && !unmountInFlight) {
             renderInk(inkUi);
             return;
         }
         inkUiLoad ??= loadCodexInkUi();
-        void inkUiLoad.then(
-            (ui) => {
+        void Promise.all([inkUiLoad, unmountInFlight]).then(
+            ([ui]) => {
                 inkUi = ui;
-                if (inkRequested) renderInk(ui);
+                if (inkRequested && !unmountInFlight) renderInk(ui);
             },
             (error) => {
                 inkUiLoad = null;
-                logger.warnFile('[codex] Failed to load the terminal display', error);
+                logger.warnFile('[codex] Failed to mount the terminal display', error);
             },
         );
     };
@@ -100,8 +102,16 @@ export function createCodexRemoteTerminalUi(params: {
         inkInstance.rerender(renderRemoteUi(ui));
     };
 
-    const unmount = async () => {
+    const unmount = (): Promise<void> => {
         inkRequested = false;
+        const unmounting = unmountUi().finally(() => {
+            if (unmountInFlight === unmounting) unmountInFlight = null;
+        });
+        unmountInFlight = unmounting;
+        return unmounting;
+    };
+
+    const unmountUi = async () => {
         if (staticControl) {
             await staticControl.stop();
             staticControl = null;

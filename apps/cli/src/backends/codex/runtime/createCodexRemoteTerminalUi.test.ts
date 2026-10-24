@@ -27,6 +27,7 @@ class FakeInputStream extends EventEmitter {
 
   resume(): this {
     this.resumed = true;
+    this.paused = false;
     return this;
   }
 
@@ -113,6 +114,30 @@ describe('createCodexRemoteTerminalUi', () => {
 
     expect(inkProbe.render ?? vi.fn()).not.toHaveBeenCalled();
     expect(stdin.rawModeChanges).not.toContain(true);
+  });
+
+  it('keeps stdin live when remounted while an unmount is still draining input', async () => {
+    const stdin = new FakeInputStream();
+    const ui = createCodexRemoteTerminalUi({
+      messageBuffer: new MessageBuffer(),
+      hasTTY: true,
+      surface: 'ink',
+      stdin: asReadStream(stdin),
+      onExit: vi.fn(),
+      onSwitchToLocal: vi.fn(),
+    });
+    inkProbe.render?.mockClear();
+
+    ui.mount();
+    const unmounting = ui.unmount();
+    ui.mount();
+    await unmounting;
+    await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalledTimes(1));
+
+    expect(stdin.paused).toBe(false);
+    expect(stdin.rawModeChanges.at(-1)).toBe(true);
+
+    await ui.unmount();
   });
 
   it('uses the static remote-control surface for daemon-started tmux sessions', async () => {
