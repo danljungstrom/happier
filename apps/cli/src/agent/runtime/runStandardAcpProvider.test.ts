@@ -115,7 +115,7 @@ function createHarness() {
       happyHomeDir: '/tmp/.happy',
       happyLibDir: '/tmp/lib',
     },
-    terminalDisplay: (() => null) as any,
+    loadTerminalDisplay: async () => () => null,
     beforeInitializeSession: ({ metadata }: any) => {
       beforeInitializeCalls += 1;
       (metadata as any).auggieAllowIndexing = true;
@@ -928,6 +928,28 @@ describe('runStandardAcpProvider', () => {
     await runStandardAcpProvider(harness.opts, harness.config, harness.deps);
 
     expect(keepAliveModes[0]).toBe('local');
+  });
+
+  it('does not load the terminal display without an attached TTY', async () => {
+    const harness = createHarness();
+    const loadTerminalDisplay = vi.fn(async () => () => null);
+    harness.config.loadTerminalDisplay = loadTerminalDisplay;
+
+    const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: false });
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
+
+    try {
+      await runStandardAcpProvider(harness.opts, harness.config, harness.deps);
+    } finally {
+      if (stdoutDescriptor) Object.defineProperty(process.stdout, 'isTTY', stdoutDescriptor);
+      else delete (process.stdout as { isTTY?: boolean }).isTTY;
+      if (stdinDescriptor) Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    }
+
+    expect(loadTerminalDisplay).not.toHaveBeenCalled();
   });
 
   it('skips terminal rendering when the provider disables the remote terminal UI', async () => {

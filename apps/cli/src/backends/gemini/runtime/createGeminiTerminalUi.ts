@@ -1,12 +1,19 @@
-import { render } from 'ink';
-import React from 'react';
+import type { render } from 'ink';
 
-import { MessageBuffer } from '@/ui/ink/messageBuffer';
+import type { MessageBuffer } from '@/ui/ink/messageBuffer';
 import { createNonBlockingStdout } from '@/ui/ink/nonBlockingStdout';
-import { GeminiTerminalDisplay } from '@/backends/gemini/ui/GeminiTerminalDisplay';
 import { DEFAULT_GEMINI_MODEL } from '@/backends/gemini/constants';
 
-export function createGeminiTerminalUi(params: {
+async function loadGeminiInkUi() {
+  const [{ render }, { default: React }, { GeminiTerminalDisplay }] = await Promise.all([
+    import('ink'),
+    import('react'),
+    import('@/backends/gemini/ui/GeminiTerminalDisplay'),
+  ]);
+  return { render, React, GeminiTerminalDisplay };
+}
+
+export async function createGeminiTerminalUi(params: {
   messageBuffer: MessageBuffer;
   hasTTY: boolean;
   stdin: NodeJS.ReadStream;
@@ -16,6 +23,8 @@ export function createGeminiTerminalUi(params: {
   onDebug: (message: string) => void;
   saveModelToConfig: (model: string) => void;
 }) {
+  // Ink and React load only with a TTY, keeping them out of daemon-started runners.
+  const inkUi = params.hasTTY ? await loadGeminiInkUi() : null;
   let inkInstance: ReturnType<typeof render> | null = null;
   let displayedModel: string | undefined = params.initialModel;
 
@@ -42,7 +51,8 @@ export function createGeminiTerminalUi(params: {
   };
 
   const mount = () => {
-    if (!params.hasTTY) return;
+    if (!inkUi) return;
+    const { render, React, GeminiTerminalDisplay } = inkUi;
 
     console.clear();
 

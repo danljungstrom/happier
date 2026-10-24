@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { render } from 'ink';
-import React from 'react';
+import type { render } from 'ink';
+import type { ComponentType } from 'react';
 import { resolveAgentIdFromFlavor } from '@happier-dev/agents';
 import { readPendingLocalId, type BackendTargetRefV1 } from '@happier-dev/protocol';
 
@@ -130,7 +130,8 @@ export type StandardAcpProviderConfig = {
   supportsMcpServers?: boolean;
   machineMetadata: MachineMetadata;
   terminalHostOwner?: InitializeBackendRunSessionOptions['terminalHostOwner'];
-  terminalDisplay: React.ComponentType<TerminalDisplayProps>;
+  /** Loaded only when a TTY is attached, so daemon-started runners never load ink or React. */
+  loadTerminalDisplay: () => Promise<ComponentType<TerminalDisplayProps>>;
   formatPromptErrorMessage: (error: unknown) => string;
   /**
    * Optional: provide a stable key used to batch messages and detect "effective" permission-mode changes.
@@ -213,6 +214,15 @@ type StandardAcpProviderDeps = {
   createLocalAgentNativeResumeRecordStoreFn?: typeof createLocalAgentNativeResumeRecordStore;
 };
 
+async function loadTerminalUi(config: StandardAcpProviderConfig, deps: StandardAcpProviderDeps) {
+  const [ink, { default: React }, TerminalDisplay] = await Promise.all([
+    import('ink'),
+    import('react'),
+    config.loadTerminalDisplay(),
+  ]);
+  return { render: deps.renderFn ?? ink.render, React, TerminalDisplay };
+}
+
 export async function runStandardAcpProvider(
   opts: StandardAcpProviderRunOptions,
   config: StandardAcpProviderConfig,
@@ -229,7 +239,6 @@ export async function runStandardAcpProvider(
   const sendReadyWithPushNotificationFn = deps.sendReadyWithPushNotificationFn ?? sendReadyWithPushNotification;
   const registerKillSessionHandlerFn = deps.registerKillSessionHandlerFn ?? registerKillSessionHandler;
   const cleanupBackendRunResourcesFn = deps.cleanupBackendRunResourcesFn ?? cleanupBackendRunResources;
-  const renderFn = deps.renderFn ?? render;
   const createLocalAgentNativeResumeRecordStoreFn =
     deps.createLocalAgentNativeResumeRecordStoreFn ?? createLocalAgentNativeResumeRecordStore;
 
@@ -427,11 +436,12 @@ export async function runStandardAcpProvider(
   const messageBuffer = new MessageBuffer();
   const hasTTY = process.stdout.isTTY && process.stdin.isTTY;
   const shouldRenderTerminalDisplay = config.shouldRenderTerminalDisplay?.({ opts, session, metadata: runtimeMetadata }) ?? true;
+  const terminalUi = hasTTY ? await loadTerminalUi(config, deps) : null;
   let inkInstance: ReturnType<typeof render> | null = null;
   const mountTerminalDisplay = (): void => {
-    if (!hasTTY || inkInstance) return;
+    if (!terminalUi || inkInstance) return;
     console.clear();
-    inkInstance = renderFn(React.createElement(config.terminalDisplay, {
+    inkInstance = terminalUi.render(terminalUi.React.createElement(terminalUi.TerminalDisplay, {
       messageBuffer,
       logPath: process.env.DEBUG ? logger.getLogPath() : undefined,
       onExit: async () => {

@@ -1297,7 +1297,7 @@ export async function runCodex(opts: {
     const turnAssistantPreviewTracker = createTurnAssistantPreviewTracker();
     let happierMcpServer: { url: string; stop: () => void } | null = null;
     let client: CodexMcpClient | null = null;
-    let remoteTerminalUi: ReturnType<typeof createCodexRemoteTerminalUi> | null = null;
+    let remoteTerminalUi: Awaited<ReturnType<typeof createCodexRemoteTerminalUi>> | null = null;
     let cleanupRunResourcesPromise: Promise<void> | null = null;
     const cleanupRunResourcesOnce = (): Promise<void> => {
         cleanupRunResourcesPromise ??= (async () => {
@@ -1654,7 +1654,7 @@ export async function runCodex(opts: {
         });
     };
 
-    remoteTerminalUi = createCodexRemoteTerminalUi({
+    remoteTerminalUi = await createCodexRemoteTerminalUi({
         messageBuffer,
         logPath: process.env.DEBUG ? logger.getLogPath() : undefined,
         hasTTY,

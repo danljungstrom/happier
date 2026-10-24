@@ -80,7 +80,7 @@ describe('createCodexRemoteTerminalUi', () => {
       onExit: vi.fn(),
       onSwitchToLocal,
     };
-    const ui = createCodexRemoteTerminalUi(params);
+    const ui = await createCodexRemoteTerminalUi(params);
 
     ui.setAllowSwitchToLocal(true);
     ui.mount();

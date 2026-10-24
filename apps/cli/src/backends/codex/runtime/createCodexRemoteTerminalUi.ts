@@ -1,17 +1,24 @@
-import { render } from 'ink';
-import React from 'react';
+import type { render } from 'ink';
 
 import { cleanupStdinAfterInk } from '@/ui/ink/cleanupStdinAfterInk';
-import { MessageBuffer } from '@/ui/ink/messageBuffer';
+import type { MessageBuffer } from '@/ui/ink/messageBuffer';
 import { createNonBlockingStdout } from '@/ui/ink/nonBlockingStdout';
-import { CodexTerminalDisplay } from '@/backends/codex/ui/CodexTerminalDisplay';
 import {
     startRemoteModeStaticControl,
     type RemoteModeControlSurface,
     type RemoteModeStaticControl,
 } from '@/ui/remoteControl/remoteModeControl';
 
-export function createCodexRemoteTerminalUi(params: {
+async function loadCodexInkUi() {
+    const [{ render }, { default: React }, { CodexTerminalDisplay }] = await Promise.all([
+        import('ink'),
+        import('react'),
+        import('@/backends/codex/ui/CodexTerminalDisplay'),
+    ]);
+    return { render, React, CodexTerminalDisplay };
+}
+
+export async function createCodexRemoteTerminalUi(params: {
     messageBuffer: MessageBuffer;
     logPath?: string;
     hasTTY: boolean;
@@ -25,8 +32,10 @@ export function createCodexRemoteTerminalUi(params: {
     let staticControl: RemoteModeStaticControl | null = null;
     let allowSwitchToLocal = false;
     const surface: RemoteModeControlSurface = params.surface ?? (params.hasTTY ? 'ink' : 'none');
+    // Ink and React load only for an attached ink surface, keeping them out of daemon-started runners.
+    const inkUi = surface === 'ink' && params.hasTTY ? await loadCodexInkUi() : null;
 
-    const renderRemoteUi = () => React.createElement(CodexTerminalDisplay, {
+    const renderRemoteUi = (ui: NonNullable<typeof inkUi>) => ui.React.createElement(ui.CodexTerminalDisplay, {
         messageBuffer: params.messageBuffer,
         logPath: params.logPath,
         allowSwitchToLocal,
@@ -48,10 +57,10 @@ export function createCodexRemoteTerminalUi(params: {
             }
             return;
         }
-        if (surface !== 'ink' || !params.hasTTY) return;
+        if (!inkUi) return;
         if (!inkInstance) {
             console.clear();
-            inkInstance = render(renderRemoteUi(), {
+            inkInstance = inkUi.render(renderRemoteUi(inkUi), {
                 exitOnCtrlC: false,
                 patchConsole: false,
                 stdout: createNonBlockingStdout(process.stdout as any),
@@ -64,7 +73,7 @@ export function createCodexRemoteTerminalUi(params: {
             params.stdin.setEncoding('utf8');
             return;
         }
-        inkInstance.rerender(renderRemoteUi());
+        inkInstance.rerender(renderRemoteUi(inkUi));
     };
 
     const unmount = async () => {
@@ -109,8 +118,8 @@ export function createCodexRemoteTerminalUi(params: {
                 onSwitchToLocal: params.onSwitchToLocal,
             });
         }
-        if (inkInstance) {
-            inkInstance.rerender(renderRemoteUi());
+        if (inkUi && inkInstance) {
+            inkInstance.rerender(renderRemoteUi(inkUi));
         }
     };
 

@@ -593,7 +593,7 @@ export async function runGemini(opts: {
   const localConfig = readGeminiLocalConfig();
   logger.debug(`[gemini] Initial model setup: env[GEMINI_MODEL_ENV]=${process.env[GEMINI_MODEL_ENV] || 'not set'}, localConfig=${localConfig.model || 'not set'}, displayedModel=${initialDisplayedModel}`);
 
-  const geminiTerminalUi = createGeminiTerminalUi({
+  const geminiTerminalUi = await createGeminiTerminalUi({
     messageBuffer,
     hasTTY,
     stdin: process.stdin,
