@@ -140,6 +140,34 @@ describe('createCodexRemoteTerminalUi', () => {
     await ui.unmount();
   });
 
+  it('contains a failed Ink render instead of rejecting unobserved', async () => {
+    const stdin = new FakeInputStream();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      const ui = createCodexRemoteTerminalUi({
+        messageBuffer: new MessageBuffer(),
+        hasTTY: true,
+        surface: 'ink',
+        stdin: asReadStream(stdin),
+        onExit: vi.fn(),
+        onSwitchToLocal: vi.fn(),
+      });
+      await import('ink');
+      inkProbe.render!.mockImplementationOnce(() => {
+        throw new Error('render failed');
+      });
+
+      ui.mount();
+      await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
   it('uses the static remote-control surface for daemon-started tmux sessions', async () => {
     vi.useFakeTimers();
     const stdin = new FakeInputStream();

@@ -67,20 +67,29 @@ export function createCodexRemoteTerminalUi(params: {
         if (surface !== 'ink' || !params.hasTTY) return;
         inkRequested = true;
         if (inkUi && !unmountInFlight) {
-            renderInk(inkUi);
+            try {
+                renderInk(inkUi);
+            } catch (error) {
+                reportInkFailure(error);
+            }
             return;
         }
-        inkUiLoad ??= loadCodexInkUi();
-        void Promise.all([inkUiLoad, unmountInFlight]).then(
-            ([ui]) => {
+        inkUiLoad ??= loadCodexInkUi().catch((error: unknown) => {
+            inkUiLoad = null;
+            throw error;
+        });
+        void Promise.all([inkUiLoad, unmountInFlight])
+            .then(([ui]) => {
                 inkUi = ui;
                 if (inkRequested && !unmountInFlight) renderInk(ui);
-            },
-            (error) => {
-                inkUiLoad = null;
-                logger.warnFile('[codex] Failed to mount the terminal display', error);
-            },
-        );
+            })
+            .catch(reportInkFailure);
+    };
+
+    // The terminal UI is a local convenience view: a failure to load or render it is
+    // logged and leaves the session running for remote clients.
+    const reportInkFailure = (error: unknown) => {
+        logger.warnFile('[codex] Failed to show the terminal display', error);
     };
 
     const renderInk = (ui: CodexInkUi) => {

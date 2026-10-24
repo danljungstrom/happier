@@ -930,6 +930,43 @@ describe('runStandardAcpProvider', () => {
     expect(keepAliveModes[0]).toBe('local');
   });
 
+  it.each([
+    ['loading', { loadFails: true, renderFails: false }],
+    ['rendering', { loadFails: false, renderFails: true }],
+  ])('keeps the session running when %s the terminal display fails', async (_phase, failure) => {
+    const harness = createHarness();
+    harness.config.loadTerminalDisplay = async () => {
+      if (failure.loadFails) throw new Error('display chunk missing');
+      return () => null;
+    };
+    const renderFn = vi.fn(() => {
+      if (failure.renderFails) throw new Error('render failed');
+      return { unmount: vi.fn() };
+    });
+    let readySent = false;
+    harness.deps.runPermissionModePromptLoopFn = async (params: any) => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      params.sendReady();
+      readySent = true;
+    };
+
+    const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true });
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+
+    try {
+      await runStandardAcpProvider(harness.opts, harness.config, { ...harness.deps, renderFn });
+    } finally {
+      if (stdoutDescriptor) Object.defineProperty(process.stdout, 'isTTY', stdoutDescriptor);
+      else delete (process.stdout as { isTTY?: boolean }).isTTY;
+      if (stdinDescriptor) Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    }
+
+    expect(readySent).toBe(true);
+  });
+
   it('does not load the terminal display without an attached TTY', async () => {
     const harness = createHarness();
     const loadTerminalDisplay = vi.fn(async () => () => null);

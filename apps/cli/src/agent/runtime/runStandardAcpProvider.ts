@@ -445,10 +445,16 @@ export async function runStandardAcpProvider(
   let terminalDisplayRequested = false;
   let inkInstance: ReturnType<typeof render> | null = null;
   const ensureTerminalUi = (): Promise<TerminalUi> => {
-    terminalUiLoad ??= loadTerminalUi(config, deps).then((ui) => {
-      terminalUi = ui;
-      return ui;
-    });
+    terminalUiLoad ??= loadTerminalUi(config, deps).then(
+      (ui) => {
+        terminalUi = ui;
+        return ui;
+      },
+      (error: unknown) => {
+        terminalUiLoad = null;
+        throw error;
+      },
+    );
     return terminalUiLoad;
   };
   const renderTerminalDisplay = (ui: TerminalUi): void => {
@@ -463,22 +469,27 @@ export async function runStandardAcpProvider(
       },
     }), { exitOnCtrlC: false, patchConsole: false });
   };
+  // The terminal display is a local convenience view: a failure to load or render it is
+  // logged and leaves the session running for remote clients.
+  const reportTerminalDisplayFailure = (error: unknown): void => {
+    logger.warnFile(`${config.uiLogPrefix} Failed to show the terminal display`, error);
+  };
   const mountTerminalDisplay = (): void => {
     if (!hasTTY) return;
     terminalDisplayRequested = true;
     if (terminalUi) {
-      renderTerminalDisplay(terminalUi);
+      try {
+        renderTerminalDisplay(terminalUi);
+      } catch (error) {
+        reportTerminalDisplayFailure(error);
+      }
       return;
     }
-    void ensureTerminalUi().then(
-      (ui) => {
+    void ensureTerminalUi()
+      .then((ui) => {
         if (terminalDisplayRequested) renderTerminalDisplay(ui);
-      },
-      (error) => {
-        terminalUiLoad = null;
-        logger.warnFile(`${config.uiLogPrefix} Failed to load the terminal display`, error);
-      },
-    );
+      })
+      .catch(reportTerminalDisplayFailure);
   };
   const unmountTerminalDisplay = async (): Promise<void> => {
     terminalDisplayRequested = false;
@@ -491,10 +502,8 @@ export async function runStandardAcpProvider(
     unmount: unmountTerminalDisplay,
     isMounted: () => inkInstance !== null,
   });
-  if (hasTTY && shouldRenderTerminalDisplay) {
-    terminalDisplayRequested = true;
-    const ui = await ensureTerminalUi();
-    if (terminalDisplayRequested) renderTerminalDisplay(ui);
+  if (shouldRenderTerminalDisplay) {
+    mountTerminalDisplay();
   }
 
   let thinking = false;
