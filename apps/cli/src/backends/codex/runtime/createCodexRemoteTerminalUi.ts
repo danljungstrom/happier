@@ -3,6 +3,7 @@ import type { render } from 'ink';
 import { cleanupStdinAfterInk } from '@/ui/ink/cleanupStdinAfterInk';
 import type { MessageBuffer } from '@/ui/ink/messageBuffer';
 import { createNonBlockingStdout } from '@/ui/ink/nonBlockingStdout';
+import { logger } from '@/ui/logger';
 import {
     startRemoteModeStaticControl,
     type RemoteModeControlSurface,
@@ -18,7 +19,9 @@ async function loadCodexInkUi() {
     return { render, React, CodexTerminalDisplay };
 }
 
-export async function createCodexRemoteTerminalUi(params: {
+type CodexInkUi = Awaited<ReturnType<typeof loadCodexInkUi>>;
+
+export function createCodexRemoteTerminalUi(params: {
     messageBuffer: MessageBuffer;
     logPath?: string;
     hasTTY: boolean;
@@ -32,10 +35,12 @@ export async function createCodexRemoteTerminalUi(params: {
     let staticControl: RemoteModeStaticControl | null = null;
     let allowSwitchToLocal = false;
     const surface: RemoteModeControlSurface = params.surface ?? (params.hasTTY ? 'ink' : 'none');
-    // Ink and React load only for an attached ink surface, keeping them out of daemon-started runners.
-    const inkUi = surface === 'ink' && params.hasTTY ? await loadCodexInkUi() : null;
+    // Ink and React load on the first ink mount, so runners that never show the ink surface never load them.
+    let inkUi: CodexInkUi | null = null;
+    let inkUiLoad: Promise<CodexInkUi> | null = null;
+    let inkRequested = false;
 
-    const renderRemoteUi = (ui: NonNullable<typeof inkUi>) => ui.React.createElement(ui.CodexTerminalDisplay, {
+    const renderRemoteUi = (ui: CodexInkUi) => ui.React.createElement(ui.CodexTerminalDisplay, {
         messageBuffer: params.messageBuffer,
         logPath: params.logPath,
         allowSwitchToLocal,
@@ -57,10 +62,29 @@ export async function createCodexRemoteTerminalUi(params: {
             }
             return;
         }
-        if (!inkUi) return;
+        if (surface !== 'ink' || !params.hasTTY) return;
+        inkRequested = true;
+        if (inkUi) {
+            renderInk(inkUi);
+            return;
+        }
+        inkUiLoad ??= loadCodexInkUi();
+        void inkUiLoad.then(
+            (ui) => {
+                inkUi = ui;
+                if (inkRequested) renderInk(ui);
+            },
+            (error) => {
+                inkUiLoad = null;
+                logger.warnFile('[codex] Failed to load the terminal display', error);
+            },
+        );
+    };
+
+    const renderInk = (ui: CodexInkUi) => {
         if (!inkInstance) {
             console.clear();
-            inkInstance = inkUi.render(renderRemoteUi(inkUi), {
+            inkInstance = ui.render(renderRemoteUi(ui), {
                 exitOnCtrlC: false,
                 patchConsole: false,
                 stdout: createNonBlockingStdout(process.stdout as any),
@@ -73,10 +97,11 @@ export async function createCodexRemoteTerminalUi(params: {
             params.stdin.setEncoding('utf8');
             return;
         }
-        inkInstance.rerender(renderRemoteUi(inkUi));
+        inkInstance.rerender(renderRemoteUi(ui));
     };
 
     const unmount = async () => {
+        inkRequested = false;
         if (staticControl) {
             await staticControl.stop();
             staticControl = null;

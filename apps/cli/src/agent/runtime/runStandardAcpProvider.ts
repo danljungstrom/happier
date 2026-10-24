@@ -214,6 +214,8 @@ type StandardAcpProviderDeps = {
   createLocalAgentNativeResumeRecordStoreFn?: typeof createLocalAgentNativeResumeRecordStore;
 };
 
+type TerminalUi = Awaited<ReturnType<typeof loadTerminalUi>>;
+
 async function loadTerminalUi(config: StandardAcpProviderConfig, deps: StandardAcpProviderDeps) {
   const [ink, { default: React }, TerminalDisplay] = await Promise.all([
     import('ink'),
@@ -436,12 +438,23 @@ export async function runStandardAcpProvider(
   const messageBuffer = new MessageBuffer();
   const hasTTY = process.stdout.isTTY && process.stdin.isTTY;
   const shouldRenderTerminalDisplay = config.shouldRenderTerminalDisplay?.({ opts, session, metadata: runtimeMetadata }) ?? true;
-  const terminalUi = hasTTY ? await loadTerminalUi(config, deps) : null;
+  // Ink, React, and the display load on the first mount, so runners whose terminal UI
+  // stays off (no TTY, or a provider-owned local terminal) never load them.
+  let terminalUi: TerminalUi | null = null;
+  let terminalUiLoad: Promise<TerminalUi> | null = null;
+  let terminalDisplayRequested = false;
   let inkInstance: ReturnType<typeof render> | null = null;
-  const mountTerminalDisplay = (): void => {
-    if (!terminalUi || inkInstance) return;
+  const ensureTerminalUi = (): Promise<TerminalUi> => {
+    terminalUiLoad ??= loadTerminalUi(config, deps).then((ui) => {
+      terminalUi = ui;
+      return ui;
+    });
+    return terminalUiLoad;
+  };
+  const renderTerminalDisplay = (ui: TerminalUi): void => {
+    if (inkInstance) return;
     console.clear();
-    inkInstance = terminalUi.render(terminalUi.React.createElement(terminalUi.TerminalDisplay, {
+    inkInstance = ui.render(ui.React.createElement(ui.TerminalDisplay, {
       messageBuffer,
       logPath: process.env.DEBUG ? logger.getLogPath() : undefined,
       onExit: async () => {
@@ -450,7 +463,25 @@ export async function runStandardAcpProvider(
       },
     }), { exitOnCtrlC: false, patchConsole: false });
   };
+  const mountTerminalDisplay = (): void => {
+    if (!hasTTY) return;
+    terminalDisplayRequested = true;
+    if (terminalUi) {
+      renderTerminalDisplay(terminalUi);
+      return;
+    }
+    void ensureTerminalUi().then(
+      (ui) => {
+        if (terminalDisplayRequested) renderTerminalDisplay(ui);
+      },
+      (error) => {
+        terminalUiLoad = null;
+        logger.warnFile(`${config.uiLogPrefix} Failed to load the terminal display`, error);
+      },
+    );
+  };
   const unmountTerminalDisplay = async (): Promise<void> => {
+    terminalDisplayRequested = false;
     if (!inkInstance) return;
     inkInstance.unmount();
     inkInstance = null;
@@ -461,7 +492,9 @@ export async function runStandardAcpProvider(
     isMounted: () => inkInstance !== null,
   });
   if (hasTTY && shouldRenderTerminalDisplay) {
-    mountTerminalDisplay();
+    terminalDisplayRequested = true;
+    const ui = await ensureTerminalUi();
+    if (terminalDisplayRequested) renderTerminalDisplay(ui);
   }
 
   let thinking = false;

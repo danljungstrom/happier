@@ -4,6 +4,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageBuffer } from '@/ui/ink/messageBuffer';
 
+// Ink owns the terminal-rendering boundary; the probe records when the module is first loaded.
+const inkProbe = vi.hoisted(() => ({
+  loaded: false,
+  render: null as null | ReturnType<typeof vi.fn>,
+}));
+vi.mock('ink', async (importOriginal) => {
+  inkProbe.loaded = true;
+  const actual = await importOriginal<typeof import('ink')>();
+  inkProbe.render = vi.fn(() => ({ unmount: vi.fn(), rerender: vi.fn() }));
+  return { ...actual, render: inkProbe.render };
+});
+
 import { createCodexRemoteTerminalUi } from './createCodexRemoteTerminalUi';
 
 class FakeInputStream extends EventEmitter {
@@ -62,6 +74,47 @@ describe('createCodexRemoteTerminalUi', () => {
     vi.useRealTimers();
   });
 
+  it('loads Ink only when the ink surface is first mounted', async () => {
+    const stdin = new FakeInputStream();
+    const ui = createCodexRemoteTerminalUi({
+      messageBuffer: new MessageBuffer(),
+      hasTTY: true,
+      surface: 'ink',
+      stdin: asReadStream(stdin),
+      onExit: vi.fn(),
+      onSwitchToLocal: vi.fn(),
+    });
+    await vi.dynamicImportSettled();
+    expect(inkProbe.loaded).toBe(false);
+
+    ui.mount();
+    await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalledTimes(1));
+    expect(stdin.rawModeChanges).toEqual([true]);
+
+    await ui.unmount();
+  });
+
+  it('does not render Ink when unmounted before the first load finishes', async () => {
+    const stdin = new FakeInputStream();
+    const ui = createCodexRemoteTerminalUi({
+      messageBuffer: new MessageBuffer(),
+      hasTTY: true,
+      surface: 'ink',
+      stdin: asReadStream(stdin),
+      onExit: vi.fn(),
+      onSwitchToLocal: vi.fn(),
+    });
+    inkProbe.render?.mockClear();
+
+    ui.mount();
+    await ui.unmount();
+    await vi.dynamicImportSettled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(inkProbe.render ?? vi.fn()).not.toHaveBeenCalled();
+    expect(stdin.rawModeChanges).not.toContain(true);
+  });
+
   it('uses the static remote-control surface for daemon-started tmux sessions', async () => {
     vi.useFakeTimers();
     const stdin = new FakeInputStream();
@@ -80,7 +133,7 @@ describe('createCodexRemoteTerminalUi', () => {
       onExit: vi.fn(),
       onSwitchToLocal,
     };
-    const ui = await createCodexRemoteTerminalUi(params);
+    const ui = createCodexRemoteTerminalUi(params);
 
     ui.setAllowSwitchToLocal(true);
     ui.mount();

@@ -952,9 +952,11 @@ describe('runStandardAcpProvider', () => {
     expect(loadTerminalDisplay).not.toHaveBeenCalled();
   });
 
-  it('skips terminal rendering when the provider disables the remote terminal UI', async () => {
+  it('skips loading and rendering the terminal UI when the provider disables it', async () => {
     const harness = createHarness();
     const renderFn = vi.fn(() => ({ unmount: vi.fn() }));
+    const loadTerminalDisplay = vi.fn(async () => () => null);
+    harness.config.loadTerminalDisplay = loadTerminalDisplay;
     (harness.config as any).shouldRenderTerminalDisplay = () => false;
 
     const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
@@ -973,6 +975,7 @@ describe('runStandardAcpProvider', () => {
     }
 
     expect(renderFn).not.toHaveBeenCalled();
+    expect(loadTerminalDisplay).not.toHaveBeenCalled();
   });
 
   it('exposes a terminal display controller for provider-managed mount and unmount transitions', async () => {
@@ -996,13 +999,16 @@ describe('runStandardAcpProvider', () => {
       controller = value;
     };
     harness.deps.runPermissionModePromptLoopFn = async (params: any) => {
-      if (!controller) throw new Error('Expected terminal display controller');
-      expect(controller.isMounted()).toBe(false);
-      controller.mount();
-      expect(controller.isMounted()).toBe(true);
-      await controller.unmount();
-      expect(controller.isMounted()).toBe(false);
-      controller.mount();
+      const terminalDisplay = controller;
+      if (!terminalDisplay) throw new Error('Expected terminal display controller');
+      expect(terminalDisplay.isMounted()).toBe(false);
+      // The first mount loads the terminal UI; later mounts render synchronously.
+      terminalDisplay.mount();
+      await vi.waitFor(() => expect(terminalDisplay.isMounted()).toBe(true));
+      await terminalDisplay.unmount();
+      expect(terminalDisplay.isMounted()).toBe(false);
+      terminalDisplay.mount();
+      expect(terminalDisplay.isMounted()).toBe(true);
       params.sendReady();
     };
 
