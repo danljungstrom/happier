@@ -50,7 +50,7 @@ export const HAPPIER_BASE_SYSTEM_PROMPT_ATTACHMENTS_V1 = trimIdent(`
   - <path> (...)
   [/attachments]
 
-  When present, open and analyze the referenced file paths before answering. If a file cannot be opened, explain the error and ask the user how to proceed.
+  When present, open and analyze the referenced file paths before answering. Relative paths are relative to the session working directory, not your home directory. If a file cannot be opened, explain the error and ask the user how to proceed.
 `);
 
 export const HAPPIER_BASE_SYSTEM_PROMPT_LINKED_WORKSPACE_FILES_V1 = trimIdent(`
