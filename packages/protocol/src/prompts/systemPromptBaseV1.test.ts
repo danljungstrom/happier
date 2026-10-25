@@ -81,6 +81,7 @@ describe('HAPPIER_BASE_SYSTEM_PROMPT_V1', () => {
   it('documents attachment blocks so referenced files are read before answering', () => {
     expect(HAPPIER_BASE_SYSTEM_PROMPT_V1).toContain('[attachments]');
     expect(HAPPIER_BASE_SYSTEM_PROMPT_V1).toContain('attachments block');
+    expect(HAPPIER_BASE_SYSTEM_PROMPT_V1).toMatch(/relative to the session working directory/i);
   });
 
   it('gives a newly created Bot one stable conditional rule for its first admitted message', () => {

@@ -226,7 +226,7 @@ export function projectSessionInputReferencesV1(params: Readonly<{
   const block = uploadEntries.length || fileEntries.length
     ? [boundedBlock ? boundedBlock.slice(0, -CLOSE.length) : `${OPEN}\n${HEADER}\n`,
       ...fileEntries,
-      ...(uploadEntries.length ? ['Attachments: open and analyze these files before answering.', ...uploadEntries] : []), CLOSE].join('\n')
+      ...(uploadEntries.length ? ['Attachments: open and analyze these files before answering. Relative paths are relative to the session working directory, not your home directory.', ...uploadEntries] : []), CLOSE].join('\n')
     : boundedBlock;
 
   let text = '';

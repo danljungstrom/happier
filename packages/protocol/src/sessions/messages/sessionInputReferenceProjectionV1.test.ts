@@ -97,6 +97,15 @@ describe('session input inline reference projection', () => {
     expect(rendered).not.toContain('omitted');
   });
 
+  it('tells the agent that relative upload paths resolve against the session working directory', () => {
+    const rendered = renderSessionInputContextPromptV1({
+      references: { uploads: [{ id: 'upload-1', name: 'file.png', path: '.happier/uploads/messages/m1/12345678-file.png', mimeType: 'image/png', sizeBytes: 5 }] },
+      transformedUserText: 'Look at this',
+    });
+    expect(rendered).toContain('path=".happier/uploads/messages/m1/12345678-file.png"');
+    expect(rendered).toMatch(/relative to the session working directory/i);
+  });
+
   it('does not introduce a resolved-context charge for file paths that previously lived in the text', () => {
     const value = mention(MENTION_KIND_V1.file, 'file', 'src/file.ts', 'file.ts');
     const projected = projectSessionInputReferencesV1({ text: value.token, references: { mentions: [value] } });
