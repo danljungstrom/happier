@@ -3,10 +3,19 @@ package dev.happier.cryptoworker
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.typedarray.TypedArray
 
 class HappierCryptoWorkerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("HappierCryptoWorker")
+
+    // Synchronous so the installer core can hash each bounded chunk in place; a 1 MB update is
+    // milliseconds natively and far slower in Hermes, which has no JIT.
+    Class("Sha256", HappierCryptoWorkerSha256::class) {
+      Constructor { -> HappierCryptoWorkerSha256() }
+      Function("update") { hasher: HappierCryptoWorkerSha256, chunk: TypedArray -> hasher.update(chunk) }
+      Function("digestHex") { hasher: HappierCryptoWorkerSha256 -> hasher.digestHex() }
+    }
 
     AsyncFunction("derivePasswordEnvelopeKey") { request: PasswordEnvelopeKeyRequest ->
       return@AsyncFunction HappierCryptoWorkerPassword.derivePasswordEnvelopeKey(request)

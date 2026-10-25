@@ -23,13 +23,19 @@
  * and appended to scratch. Interrupted new tails are retried; existing scratch
  * prefixes survive cancellation and still resume through HTTP Range.
  *
- * Digest: the adapter uses the shared incremental SHA-256 implementation, so
- * native installs do not retain downloaded chunks until finalize.
+ * Digest: chunks are hashed incrementally, so native installs do not retain
+ * downloaded chunks until finalize. Hermes has no JIT, so a JS SHA-256 is far
+ * slower than native and blocks the JS thread for minutes over a pack's largest
+ * files; the native `HappierCryptoWorker.Sha256` keeps the digest state natively.
+ * Builds whose native module predates it use the shared JS implementation.
  */
+
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 import { randomUUID } from '@/platform/randomUUID';
 
 import type {
+  ModelPackHasher,
   ModelPackDownloadRequest,
   ModelPackDownloadStream,
   ModelPackDurableRecoveryRecord,
@@ -329,6 +335,26 @@ function pruneScratchTreeToPlan(
   visit(scratchDir, []);
 }
 
+type NativeSha256 = { update(chunk: Uint8Array): void; digestHex(): string };
+
+let reportedJsHashFallback = false;
+
+function createModelPackHasher(): ModelPackHasher {
+  const Sha256 = requireOptionalNativeModule<{ Sha256?: new () => NativeSha256 }>('HappierCryptoWorker')?.Sha256;
+  if (typeof Sha256 !== 'function') {
+    if (!reportedJsHashFallback) {
+      reportedJsHashFallback = true;
+      console.warn('[modelPacks] Native SHA-256 unavailable; verifying model files on the JS thread');
+    }
+    return createSha256Hasher();
+  }
+  const native = new Sha256();
+  return {
+    update: (chunk) => native.update(chunk),
+    digestHex: async () => native.digestHex().toLowerCase(),
+  };
+}
+
 /** Native transfer followed by bounded disk reads through the shared installer core. */
 function createDownloadOpener(
   fs: InstallerFs,
@@ -396,7 +422,7 @@ export function createExpoModelPackInstallerHost(opts: {
 
   return {
     openDownload: createDownloadOpener(fs, opts.download ?? downloadNativeModelPackFile, opts.excludeFromBackup),
-    createHasher: createSha256Hasher,
+    createHasher: createModelPackHasher,
     beginStaging: async (packId, plan: ModelPackStagingPlan): Promise<ModelPackStagingHandle> => {
       const lease = opts.operationLease ?? acquireOperationLease(fs, packId);
       assertOperationAvailable(fs, packId, lease);

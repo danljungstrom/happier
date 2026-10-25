@@ -11,6 +11,20 @@ public final class HappierCryptoWorkerModule: Module {
   public func definition() -> ModuleDefinition {
     Name("HappierCryptoWorker")
 
+    // Synchronous so the installer core can hash each bounded chunk in place; a 1 MB update is
+    // milliseconds natively and far slower in Hermes, which has no JIT.
+    Class("Sha256", HappierCryptoWorkerSha256.self) {
+      Constructor {
+        HappierCryptoWorkerSha256()
+      }
+      Function("update") { (hasher: HappierCryptoWorkerSha256, chunk: TypedArray) in
+        try hasher.update(chunk)
+      }
+      Function("digestHex") { (hasher: HappierCryptoWorkerSha256) in
+        try hasher.digestHex()
+      }
+    }
+
     AsyncFunction("derivePasswordEnvelopeKey") { (request: PasswordEnvelopeKeyRequest) in
       try HappierCryptoWorkerPassword.derivePasswordEnvelopeKey(request)
     }.runOnQueue(Self.workerQueue)

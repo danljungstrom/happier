@@ -31,6 +31,7 @@ Pod::Spec.new do |s|
     'HappierCryptoWorkerPassword.swift',
     'HappierCryptoWorkerSecretbox.swift',
     'HappierCryptoWorkerSessionCrypto.swift',
+    'HappierCryptoWorkerSha256.swift',
     'HappierCryptoWorkerTypes.swift',
   ]
 end

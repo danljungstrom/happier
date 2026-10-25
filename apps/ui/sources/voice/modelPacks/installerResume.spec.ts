@@ -242,6 +242,47 @@ describe('Expo native host — real Range resume (FIND-010)', () => {
     expect(files.has(`${PACK_DIR}/removed.bin`)).toBe(false);
   });
 
+  it('verifies transferred bytes with the native incremental hasher when the binary provides one', async () => {
+    const { installOptionalNativeModuleForTests } = await import('@/dev/expoModulesCoreStub');
+    let nativeHashedBytes = 0;
+    class Sha256 {
+      private readonly hash = createHash('sha256');
+      update(chunk: Uint8Array) { nativeHashedBytes += chunk.byteLength; this.hash.update(chunk); }
+      digestHex() { return this.hash.digest('hex'); }
+    }
+    const restore = installOptionalNativeModuleForTests('HappierCryptoWorker', { Sha256 });
+    try {
+      const { fs, files } = createMemFs();
+      const full = new Uint8Array(Array.from({ length: 10 }, (_, i) => i + 1));
+      const host = createExpoModelPackInstallerHost({ download: createMemNativeDownload(fs, (async () => streamResponse(full, 200)) as typeof fetch), fs });
+      await installModelPackWithHost({ host, packId: 'resume', manifest: makeManifest(full), signal: new AbortController().signal });
+
+      expect(nativeHashedBytes).toBe(full.length);
+      expect(Array.from(files.get(`${PACK_DIR}/model.bin`)!)).toEqual(Array.from(full));
+    } finally {
+      restore();
+    }
+  });
+
+  it('rejects a transferred file whose native digest does not match the manifest', async () => {
+    const { installOptionalNativeModuleForTests } = await import('@/dev/expoModulesCoreStub');
+    class Sha256 {
+      update() {}
+      digestHex() { return '0'.repeat(64); }
+    }
+    const restore = installOptionalNativeModuleForTests('HappierCryptoWorker', { Sha256 });
+    try {
+      const { fs, files } = createMemFs();
+      const full = new Uint8Array([1, 2, 3, 4]);
+      const host = createExpoModelPackInstallerHost({ download: createMemNativeDownload(fs, (async () => streamResponse(full, 200)) as typeof fetch), fs });
+      await expect(installModelPackWithHost({ host, packId: 'resume', manifest: makeManifest(full), signal: new AbortController().signal }))
+        .rejects.toThrow('model_pack_sha256_mismatch');
+      expect(files.has(`${PACK_DIR}/model.bin`)).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
   it('resumes from a surviving scratch partial with an HTTP Range request', async () => {
     const { fs, files } = createMemFs();
     const full = new Uint8Array(Array.from({ length: 10 }, (_, i) => i + 1));
