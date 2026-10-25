@@ -70,6 +70,7 @@ describe('createGeminiTerminalUi', () => {
 
   it('contains a failed Ink render instead of rejecting unobserved', async () => {
     await import('ink');
+    inkProbe.render!.mockClear();
     inkProbe.render!.mockImplementationOnce(() => {
       throw new Error('render failed');
     });
@@ -78,7 +79,7 @@ describe('createGeminiTerminalUi', () => {
     try {
       const ui = createUi(new FakeInputStream());
       ui.mount();
-      await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalledTimes(1));
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(unhandled).not.toHaveBeenCalled();
     } finally {

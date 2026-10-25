@@ -154,12 +154,13 @@ describe('createCodexRemoteTerminalUi', () => {
         onSwitchToLocal: vi.fn(),
       });
       await import('ink');
+      inkProbe.render!.mockClear();
       inkProbe.render!.mockImplementationOnce(() => {
         throw new Error('render failed');
       });
 
       ui.mount();
-      await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalled());
+      await vi.waitFor(() => expect(inkProbe.render).toHaveBeenCalledTimes(1));
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(unhandled).not.toHaveBeenCalled();

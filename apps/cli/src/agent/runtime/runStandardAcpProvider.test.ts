@@ -945,7 +945,10 @@ describe('runStandardAcpProvider', () => {
     });
     let readySent = false;
     harness.deps.runPermissionModePromptLoopFn = async (params: any) => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.dynamicImportSettled();
+      if (failure.renderFails) {
+        await vi.waitFor(() => expect(renderFn).toHaveBeenCalledTimes(1));
+      }
       params.sendReady();
       readySent = true;
     };
