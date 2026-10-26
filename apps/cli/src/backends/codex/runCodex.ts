@@ -866,6 +866,7 @@ export async function runCodex(opts: {
                 SESSION_CONFIG_OPTIONS_STATE_KEY,
             ],
         startupSideEffectsOrder: 'persist-first',
+        terminalHostOwner: hasHostedTerminal ? 'runtime' : 'startup',
         allowOfflineStub: true,
         deferPendingFirstInputCommitUntilRuntimeReady: true,
         onSessionSwap: (newSession) => {

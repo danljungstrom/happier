@@ -3962,6 +3962,11 @@ export const zhHans: TranslationStructure = {
     plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "应用和终端", subtitle: "在 Happier 应用或 Claude Code 终端中响应。" },
+                    app_only: { title: "应用内请求", subtitle: "使用现有的应用请求流程。Claude 仍可能在其终端中接受响应。" },
+                    terminal_only: { title: "仅终端", subtitle: "在 Claude Code 终端中响应。" },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "模型发现",
@@ -4010,6 +4015,14 @@ export const zhHans: TranslationStructure = {
                                 subtitle: "使用 Happier 内置的 zellij 主机。"
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "回答问题",
+                        subtitle: "选择在统一终端会话中回答问题的位置。"
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "批准权限请求",
+                        subtitle: "选择在统一终端会话中批准权限请求的位置。"
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "大型会话恢复",
@@ -4121,7 +4134,7 @@ export const zhHans: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "实验性：本地权限桥接",
-                        subtitle: "将 Claude 本地模式的权限请求转发到 Happier，以便你可以在界面中批准或拒绝。"
+                        subtitle: "将传统本地 Claude 会话的权限请求转发到 Happier。统一终端会话使用上方的响应选项。"
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "保持请求打开直到回应",

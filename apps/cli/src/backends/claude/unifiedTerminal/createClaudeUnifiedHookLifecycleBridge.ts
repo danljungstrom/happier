@@ -656,6 +656,11 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
           }
         } else if (hookEventName === 'PermissionRequest') {
           observePermissionBlocked(data);
+          if (!sidechain) {
+            void Promise.resolve(opts.onMainSessionScreenMayHaveChanged?.()).catch((error) => {
+              logger.infoFile('[unified]: Native permission screen observation failed', error);
+            });
+          }
         } else if (
           hookEventName === 'PostToolUse'
           || hookEventName === 'PermissionRequestCompleted'

@@ -45,6 +45,36 @@ graph TB
 - **Persistence/config:** `src/persistence.ts` + `src/configuration.ts` manage local state in `~/.happy`.
 - **Agents:** `src/claude`, `src/codex`, `src/gemini` provide provider-specific runners.
 
+## Claude unified questions and approvals (development)
+
+`backends/claude/localPermissions/routeClaudePermissionHook` owns hook delivery
+for both ordinary and fast-start runners. The shared Claude settings policy
+resolves question and permission response locations independently. Classic
+local and SDK delivery retains its existing bridge owner. In a unified primary
+session, `app_only` (shown as **App prompts**) uses that hook bridge; terminal
+delivery returns the hook immediately and gives the existing unified dialog
+broker the native occurrence. Questions wait for the app in the bridge flow.
+Ordinary permission controls remain Claude-owned: Claude can accept a native
+terminal response while the app hook waits, so observed native results retire
+the outstanding app request. This setting does not disable Claude’s terminal
+controls. Background subagents still use the bridge when app delivery is enabled
+because they have no primary native form.
+
+`ClaudeUnifiedDialogChoiceBroker` correlates the hook with the actual tool-use
+ID and owns the one app waiter. Native questions reuse that ID so the transcript
+and request join into one question card. Permission choices use a separate
+structured-question projection to preserve Claude's exact displayed scopes;
+the original tool or plan remains in the transcript. Plan controls require a
+live matching request, including after reconnect.
+
+The existing screen probe observes native rendering and the existing terminal
+drivers navigate verified forms. App question responses are acknowledged only
+after Claude's correlated structured result matches. Native tool results,
+including cancellation results without a completion hook, retire the app waiter.
+Terminal successes record the observed answer instead of a canceled request.
+Unknown forms and conflicting local drafts fail closed to terminal interaction.
+This is development source behavior, not a released-channel guarantee.
+
 ## Direct-session JSONL read progress (development)
 
 The shared readers in `api/directSessions/filePaging` own byte paging for native
@@ -1204,6 +1234,13 @@ daemon registration and webhook completion. The common owner binds the reported
 session before waking its existing pending queue and clears stale Stop state when
 an explicit resume is accepted. Automatic recovery is a new launch attempt, so it
 does not reuse the original caller's already accepted request nonce.
+In development source, Claude unified-terminal startup leaves attachment persistence,
+terminal binding, and host-failure reporting to its runtime, including deferred startup
+after a server connection failure. The shared session initializer still reports the
+session to the daemon; its temporary plain/requested-tmux launch metadata is not a
+terminal fallback. Ordinary daemon tmux fallbacks retain their warning.
+Hosted clients of supported Codex App Server and OpenCode server runtimes use the same ownership:
+their shared attached-terminal supervisor persists and reports the actual presenter.
 For these shared provider-attach runtimes, the hosted native TUI is optional:
 `spawnHooks.resolveDaemonTerminalPresentation` keeps the controller headless,
 and `createSharedProviderLocalControl.onTerminalExit` releases the local-control

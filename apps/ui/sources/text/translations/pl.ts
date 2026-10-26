@@ -4106,6 +4106,11 @@ export const pl: TranslationStructure = {
       plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "Aplikacja i terminal", subtitle: "Odpowiadaj w aplikacji Happier lub terminalu Claude Code." },
+                    app_only: { title: "Prośby w aplikacji", subtitle: "Korzystaj z dotychczasowego sposobu obsługi próśb w aplikacji. Claude może nadal przyjmować odpowiedzi w swoim terminalu." },
+                    terminal_only: { title: "Tylko terminal", subtitle: "Odpowiadaj w terminalu Claude Code." },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "Wykrywanie modeli",
@@ -4154,6 +4159,14 @@ export const pl: TranslationStructure = {
                                 subtitle: "Użyj hosta zellij dołączonego do Happier."
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "Odpowiadanie na pytania",
+                        subtitle: "Wybierz, gdzie odpowiadać na pytania podczas sesji ujednoliconego terminala."
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "Zatwierdzanie próśb o uprawnienia",
+                        subtitle: "Wybierz, gdzie zatwierdzać prośby o uprawnienia podczas sesji ujednoliconego terminala."
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Wznawianie duzych sesji",
@@ -4265,7 +4278,7 @@ export const pl: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Eksperymentalne: lokalny most uprawnień",
-                        subtitle: "Przekazuje prośby o uprawnienia z lokalnego trybu Claude do Happier, aby można było je zatwierdzać lub odrzucać z interfejsu."
+                        subtitle: "Przekazuj prośby o uprawnienia z klasycznych lokalnych sesji Claude do Happier. Sesje ujednoliconego terminala używają powyższych opcji odpowiedzi."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Trzymaj żądania otwarte do odpowiedzi",

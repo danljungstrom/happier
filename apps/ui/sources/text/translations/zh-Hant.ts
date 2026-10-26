@@ -3739,6 +3739,11 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "應用程式和終端機", subtitle: "在 Happier 應用程式或 Claude Code 終端機中回應。" },
+                    app_only: { title: "應用程式內請求", subtitle: "使用現有的應用程式請求流程。Claude 仍可能在其終端機中接受回應。" },
+                    terminal_only: { title: "僅終端機", subtitle: "在 Claude Code 終端機中回應。" },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "模型探索",
@@ -3805,6 +3810,14 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
                                 subtitle: "拒絕 Happier 開啟的工作區中目前重新擷取的 Claude 提示。"
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "回答問題",
+                        subtitle: "選擇在統一終端機工作階段中回答問題的位置。"
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "核准權限請求",
+                        subtitle: "選擇在統一終端機工作階段中核准權限請求的位置。"
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "大型會話恢復",
@@ -3898,7 +3911,7 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "實驗性：本機權限橋接",
-                        subtitle: "將 Claude 本機模式的權限請求轉送到 Happier，讓你可以在介面中核准或拒絕。"
+                        subtitle: "將傳統本機 Claude 工作階段的權限請求轉送到 Happier。統一終端機工作階段使用上方的回應選項。"
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "保持請求開啟直到回應",

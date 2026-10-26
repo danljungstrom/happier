@@ -3785,6 +3785,11 @@ export const en = {
 	        plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "App and terminal", subtitle: "Respond in the Happier app or Claude Code terminal." },
+                    app_only: { title: "App prompts", subtitle: "Use the existing app request flow. Claude may still accept responses in its terminal." },
+                    terminal_only: { title: "Terminal only", subtitle: "Respond in the Claude Code terminal." },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "Model discovery",
@@ -3833,6 +3838,14 @@ export const en = {
                                 subtitle: "Use Happier's bundled zellij host."
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "Answer questions",
+                        subtitle: "Choose where to answer questions during unified terminal sessions."
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "Approve permission requests",
+                        subtitle: "Choose where to approve permission requests during unified terminal sessions."
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Large-session resume",
@@ -3944,7 +3957,7 @@ export const en = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Experimental: local permission bridge",
-                        subtitle: "Forward Claude local-mode permission prompts to Happier so you can approve or deny from the app UI."
+                        subtitle: "Forward permission prompts from classic local Claude sessions to Happier. Unified terminal sessions use the response choices above."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Keep requests open until answered",

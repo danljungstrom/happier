@@ -3873,6 +3873,11 @@ export const ca: TranslationStructure = {
 	        plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "App i terminal", subtitle: "Respon a l’app Happier o al terminal de Claude Code." },
+                    app_only: { title: "Sol·licituds a l’app", subtitle: "Fes servir el flux habitual de sol·licituds de l’app. Claude pot continuar acceptant respostes al seu terminal." },
+                    terminal_only: { title: "Només terminal", subtitle: "Respon al terminal de Claude Code." },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "Descobriment de models",
@@ -3921,6 +3926,14 @@ export const ca: TranslationStructure = {
                                 subtitle: "Usa l'amfitrió zellij inclòs amb Happier."
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "Respondre preguntes",
+                        subtitle: "Tria on respondre preguntes durant les sessions de terminal unificat."
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "Aprovar sol·licituds de permís",
+                        subtitle: "Tria on aprovar sol·licituds de permís durant les sessions de terminal unificat."
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Represa de sessions grans",
@@ -4032,7 +4045,7 @@ export const ca: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Experimental: pont local de permisos",
-                        subtitle: "Reenvia les sol·licituds de permisos del mode local de Claude a Happier perquè les puguis aprovar o rebutjar des de la interfície."
+                        subtitle: "Envia a Happier les sol·licituds de permís de les sessions locals clàssiques de Claude. Les sessions de terminal unificat fan servir les opcions de resposta anteriors."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Mantén les sol·licituds obertes fins a respondre",

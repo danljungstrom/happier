@@ -2436,7 +2436,12 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
       };
       lifecycleBridge = activeHookSubscription.subscribe
         ? createClaudeUnifiedHookLifecycleBridge({
-            subscribeClaudeSessionHooks: activeHookSubscription.subscribe,
+            subscribeClaudeSessionHooks: (callback) => activeHookSubscription.subscribe?.((data, observation) => {
+              // Subscribe with the startup bridges: an earlier subscriber would close the
+              // replay window before provider-launch SessionStart reaches identity validation.
+              opts.dialogChoiceBroker?.observeSessionHook(data);
+              callback(data, observation);
+            }),
             arbiter,
             completionQuiescenceMs:
               opts.lifecycleCompletionQuiescenceMs ?? configuration.claudeLocalTurnCompletionQuiescenceMs,
@@ -2562,6 +2567,11 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
               lifecycleBridge?.handleProviderActivityObservationLoss(reason);
             },
             onRawTranscriptValue: (value, observation) => {
+              if (!observation.historicalReplay) {
+                void opts.dialogChoiceBroker?.observeTranscript(value).catch((error) => {
+                  logger.infoFile('[unified]: Native prompt transcript settlement failed', error);
+                });
+              }
               acceptedPromptTranscriptDiscovery.observeControlCommandTranscript(value);
               // Native Claude `/goal` source (plan H7): the goal_status attachment +
               // system/init slash_commands survive only on this raw channel (the

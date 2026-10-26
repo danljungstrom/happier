@@ -3784,6 +3784,11 @@ export const de: TranslationStructure = {
 	        plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "App und Terminal", subtitle: "Antworte in der Happier-App oder im Claude Code-Terminal." },
+                    app_only: { title: "Anfragen in der App", subtitle: "Nutze den bisherigen Anfrageablauf in der App. Claude kann weiterhin Antworten in seinem Terminal annehmen." },
+                    terminal_only: { title: "Nur Terminal", subtitle: "Antworte im Claude Code-Terminal." },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "Modellerkennung",
@@ -3832,6 +3837,14 @@ export const de: TranslationStructure = {
                                 subtitle: "Das von Happier mitgelieferte zellij nutzen."
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "Fragen beantworten",
+                        subtitle: "Wähle, wo du Fragen in gemeinsamen Terminalsitzungen beantwortest."
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "Berechtigungsanfragen genehmigen",
+                        subtitle: "Wähle, wo du Berechtigungsanfragen in gemeinsamen Terminalsitzungen genehmigst."
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Fortsetzen großer Sessions",
@@ -3943,7 +3956,7 @@ export const de: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Experimentell: lokale Berechtigungs-Bridge",
-                        subtitle: "Berechtigungsabfragen aus Claudes lokalem Modus an Happier weiterleiten, damit du sie in der App freigeben oder ablehnen kannst."
+                        subtitle: "Leite Berechtigungsanfragen klassischer lokaler Claude-Sitzungen an Happier weiter. Gemeinsame Terminalsitzungen verwenden die Antwortoptionen oben."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Anfragen offen lassen, bis sie beantwortet sind",

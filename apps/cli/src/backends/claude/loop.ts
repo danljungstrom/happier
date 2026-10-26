@@ -129,6 +129,7 @@ interface LoopOptions {
     startedBy?: 'daemon' | 'terminal'
     terminalRuntime?: TerminalRuntimeFlags | null
     defaultSystemPromptText?: string
+    observeClaudePermissionTranscript?: (value: unknown) => void
     precomputedMcpBridge?: { mcpServers: Record<string, McpServerConfig>; stop: () => void } | null
     reportSessionMetadataToDaemon?: (input: Readonly<{
         sessionId: string;
@@ -180,6 +181,7 @@ export async function loop(opts: LoopOptions): Promise<number> {
         startedBy: opts.startedBy ?? 'terminal',
         terminalRuntime: opts.terminalRuntime ?? null,
         defaultSystemPromptText: opts.defaultSystemPromptText,
+        observeClaudePermissionTranscript: opts.observeClaudePermissionTranscript,
         precomputedMcpBridge: opts.precomputedMcpBridge ?? null,
         reportSessionMetadataToDaemon: opts.reportSessionMetadataToDaemon ?? null,
         runtimeActivityContributions,

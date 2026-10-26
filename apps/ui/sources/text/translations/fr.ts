@@ -3784,6 +3784,11 @@ export const fr: TranslationStructure = {
 	        plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "Application et terminal", subtitle: "Répondez dans l’application Happier ou le terminal Claude Code." },
+                    app_only: { title: "Demandes dans l’application", subtitle: "Utilisez le flux habituel de demandes dans l’application. Claude peut toujours accepter des réponses dans son terminal." },
+                    terminal_only: { title: "Terminal uniquement", subtitle: "Répondez dans le terminal Claude Code." },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "Découverte des modèles",
@@ -3832,6 +3837,14 @@ export const fr: TranslationStructure = {
                                 subtitle: "Utiliser l’hôte zellij embarqué de Happier."
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "Répondre aux questions",
+                        subtitle: "Choisissez où répondre aux questions dans les sessions de terminal unifié."
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "Approuver les demandes d’autorisation",
+                        subtitle: "Choisissez où approuver les demandes d’autorisation dans les sessions de terminal unifié."
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Reprise des grandes sessions",
@@ -3943,7 +3956,7 @@ export const fr: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Expérimental : passerelle de permissions locale",
-                        subtitle: "Transfère les demandes de permission du mode local de Claude vers Happier pour que tu puisses approuver ou refuser depuis l’app."
+                        subtitle: "Transmettez les demandes d’autorisation des sessions Claude locales classiques à Happier. Les sessions de terminal unifié utilisent les choix de réponse ci-dessus."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Garder les demandes ouvertes jusqu’à réponse",

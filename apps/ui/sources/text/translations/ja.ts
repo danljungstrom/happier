@@ -4366,6 +4366,11 @@ localTailscale: {
     plugins: {
             claude: {
                 title: "Claude Code",
+                responseLocationOptions: {
+                    app_and_terminal: { title: "アプリとターミナル", subtitle: "HappierアプリまたはClaude Codeターミナルで回答します。" },
+                    app_only: { title: "アプリで確認", subtitle: "既存のアプリ内リクエストフローを使用します。Claude は引き続きターミナルでの回答を受け付ける場合があります。" },
+                    terminal_only: { title: "ターミナルのみ", subtitle: "Claude Codeターミナルで回答します。" },
+                },
                 sections: {
                     claudeModelDiscovery: {
                         title: "モデルの検出",
@@ -4414,6 +4419,14 @@ localTailscale: {
                                 subtitle: "Happier に同梱された zellij ホストを使用します。"
                             }
                         }
+                    },
+                    claudeUnifiedTerminalQuestionResponseLocation: {
+                        title: "質問に回答",
+                        subtitle: "統合ターミナルセッションで質問に回答する場所を選びます。"
+                    },
+                    claudeUnifiedTerminalPermissionResponseLocation: {
+                        title: "権限リクエストを承認",
+                        subtitle: "統合ターミナルセッションで権限リクエストを承認する場所を選びます。"
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "大規模セッションの再開",
@@ -4525,7 +4538,7 @@ localTailscale: {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "実験的: ローカル権限ブリッジ",
-                        subtitle: "Claude のローカルモード権限プロンプトを Happier に転送し、UI から承認または拒否できるようにします。"
+                        subtitle: "従来のローカルClaudeセッションの権限リクエストをHappierに転送します。統合ターミナルセッションでは上記の回答設定を使用します。"
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "応答があるまで要求を開いたままにする",
