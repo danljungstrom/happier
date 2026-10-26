@@ -10,6 +10,21 @@ import {
 } from './claudeRemote.js';
 
 describe('buildClaudeRemoteOutgoingMessageMetaExtras', () => {
+  it('keeps idle reclamation opt-in and carries a validated duration', () => {
+    expect(buildClaudeRemoteOutgoingMessageMetaExtras({})).toMatchObject({
+      claudeRemoteIdleReclaimEnabled: false,
+      claudeRemoteIdleReclaimTimeoutMinutes: 30,
+    });
+    expect(buildClaudeRemoteOutgoingMessageMetaExtras({
+      claudeRemoteIdleReclaimEnabled: true,
+      claudeRemoteIdleReclaimTimeoutMinutes: 45,
+    })).toMatchObject({ claudeRemoteIdleReclaimEnabled: true, claudeRemoteIdleReclaimTimeoutMinutes: 45 });
+    expect(buildClaudeRemoteOutgoingMessageMetaExtras({
+      claudeRemoteIdleReclaimEnabled: 'true',
+      claudeRemoteIdleReclaimTimeoutMinutes: 0,
+    })).toMatchObject({ claudeRemoteIdleReclaimEnabled: false, claudeRemoteIdleReclaimTimeoutMinutes: 30 });
+  });
+
   it('keeps native session history attribution opt-in and carries only explicit booleans', () => {
     expect(buildClaudeRemoteOutgoingMessageMetaExtras({}).claudeCodeIncludeInNativeHistory).toBe(false);
     expect(buildClaudeRemoteOutgoingMessageMetaExtras({ claudeCodeIncludeInNativeHistory: true }).claudeCodeIncludeInNativeHistory).toBe(true);

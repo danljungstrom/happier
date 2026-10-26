@@ -1,6 +1,8 @@
 import { render } from "ink";
 import { Session } from "./session";
 import type { Metadata } from '@/api/types';
+import { deriveActivitySummaryFromAgentState } from '@/api/session/deriveActivitySummaryFromAgentState';
+import { CLAUDE_REMOTE_PROVIDER_FIELDS, CLAUDE_REMOTE_PROVIDER_SETTINGS_DEFAULTS } from '@happier-dev/agents';
 import { MessageBuffer } from "@/ui/ink/messageBuffer";
 import { RemoteModeDisplay } from "@/backends/claude/ui/RemoteModeDisplay";
 import React from "react";
@@ -108,7 +110,7 @@ import { getProjectPath } from './utils/path';
 import { resolveClaudeConfigDirOverride } from './utils/resolveClaudeConfigDirOverride';
 import { tryReadTextFileTail } from '@/agent/runtime/readTextFileTail';
 import { readClaudeSessionJsonlMessages } from './utils/readClaudeSessionJsonlMessages';
-import { normalizeClaudeToolUseNamesInRawJsonLines } from './utils/normalizeClaudeToolUseNames';
+import { normalizeClaudeToolNameToCanonicalToolNameV2, normalizeClaudeToolUseNamesInRawJsonLines } from './utils/normalizeClaudeToolUseNames';
 import { buildTurnChangeSetDiffInput } from '@/agent/tools/diff/buildTurnChangeSetDiffInput';
 import { ClaudeTurnChangeTracker } from './utils/ClaudeTurnChangeTracker';
 import { isClaudeExplicitDiffToolInput } from './utils/isClaudeExplicitDiffToolInput';
@@ -133,6 +135,7 @@ import {
 } from './remote/runtimeActivityEvidence';
 import {
     hashClaudeEnhancedModeForQueue,
+    hashClaudeEnhancedModeForLaunch,
     hashClaudeUnifiedTerminalLaunchOptionsForQueue,
 } from './remote/modeHash';
 import {
@@ -247,14 +250,15 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
 }
 
-const SCHEDULED_PROVIDER_WORK_TOOL_NAMES: ReadonlySet<string> = new Set(['CronCreate', 'ScheduleWakeup']);
+const RESIDENT_PROVIDER_WORK_TOOL_NAMES: ReadonlySet<string> = new Set(['CronCreate', 'ScheduleWakeup', 'AgentTeamCreate']);
 
-function startsScheduledProviderWork(message: SDKMessage): boolean {
+function startsResidentProviderWork(message: SDKMessage): boolean {
     if (message.type !== 'assistant') return false;
     const content: unknown = (message as { message?: { content?: unknown } }).message?.content;
     return Array.isArray(content) && content.some((block) => {
         const record = readRecord(block);
-        return record?.type === 'tool_use' && typeof record.name === 'string' && SCHEDULED_PROVIDER_WORK_TOOL_NAMES.has(record.name);
+        return record?.type === 'tool_use' && typeof record.name === 'string'
+            && RESIDENT_PROVIDER_WORK_TOOL_NAMES.has(normalizeClaudeToolNameToCanonicalToolNameV2(record.name));
     });
 }
 
@@ -876,11 +880,12 @@ export async function claudeRemoteLauncher(
         }
     }
 
-    // Session crons and /loop wakeups live inside the Claude child; idle exit would silently drop them.
-    let launchStartedScheduledProviderWork = false;
+    // Schedules and team coordination may live inside the child. Until their release/resume contract
+    // is established, observing their creation conservatively excludes this activation from reclamation.
+    let launchStartedResidentProviderWork = false;
     function onMessage(message: SDKMessage) {
-        if (!launchStartedScheduledProviderWork && startsScheduledProviderWork(message)) {
-            launchStartedScheduledProviderWork = true;
+        if (!launchStartedResidentProviderWork && startsResidentProviderWork(message)) {
+            launchStartedResidentProviderWork = true;
         }
         // The Agent SDK owns its live provider-task feed internally and Unified owns the raw JSONL
         // feed. Legacy stream-json reaches this shared callback, so route only that mode here to
@@ -1393,14 +1398,13 @@ export async function claudeRemoteLauncher(
             abortController = controller;
             // Idle exit only stops a child this launch actually started with a prompt.
             let launchDeliveredPrompt = false;
-            launchStartedScheduledProviderWork = false;
+            launchStartedResidentProviderWork = false;
             if (terminationSignal?.aborted) {
                 // Termination arrived between launches; never start another provider run.
                 controller.abort(terminationSignal.reason ?? 'claude-runner-termination');
             }
             abortFuture = new Future<void>();
             didUserAbortThisLaunch = false;
-            let modeHash: string | null = null;
             let mode: EnhancedMode | null = null;
             let remoteProviderInputOutcomes: ReturnType<typeof createClaudeRemoteProviderInputOutcomeBridge> | null = null;
             let applyUnifiedTerminalMetadataMode: ((mode: EnhancedMode) => Promise<ClaudeUnifiedRuntimeControlApplyResult>) | null = null;
@@ -1519,6 +1523,10 @@ export async function claudeRemoteLauncher(
                 };
                 const isProviderIdleForExit = (): boolean => {
                     if (session.thinking || session.client.hasActiveCanonicalTurn?.() !== false) return false;
+                    const agentState = session.client.getAgentStateSnapshot?.();
+                    if (!agentState || goalWorkStateSource.hasActiveGoal()) return false;
+                    const attention = deriveActivitySummaryFromAgentState(agentState);
+                    if (attention.pendingPermissionRequestCount > 0 || attention.pendingUserActionRequestCount > 0) return false;
                     const providerTaskState = providerTaskRuntimeActivityAdapter?.readCurrentState()
                         ?? (providerRuntimeActivityEvidence.providerActivityLedger.hasActiveProviderTasks() ? 'active' : 'idle');
                     return providerTaskState === 'idle';
@@ -1528,7 +1536,11 @@ export async function claudeRemoteLauncher(
                 // on the next prompt and resumes the same Claude session.
                 const waitForNextBatchOrIdleExit = async (): Promise<MessageBatch<EnhancedMode, string> | null> => {
                     const next = waitForNextBatch();
-                    const idleExitMs = configuration.claudeRemoteIdleExitMs;
+                    if (mode?.claudeRemoteIdleReclaimEnabled !== true) return next;
+                    const appTimeoutMinutes = CLAUDE_REMOTE_PROVIDER_FIELDS.claudeRemoteIdleReclaimTimeoutMinutes.schema
+                        .safeParse(mode.claudeRemoteIdleReclaimTimeoutMinutes).data
+                        ?? CLAUDE_REMOTE_PROVIDER_SETTINGS_DEFAULTS.claudeRemoteIdleReclaimTimeoutMinutes;
+                    const idleExitMs = configuration.claudeRemoteIdleExitMs ?? appTimeoutMinutes * 60_000;
                     if (idleExitMs <= 0 || !launchDeliveredPrompt || activeRuntimeModeKind === 'unifiedTerminal') return next;
                     // `/checkpoints` and `/rewind` read checkpoint ids held only by the running Agent SDK
                     // runner; a restart would forget them.
@@ -1545,7 +1557,7 @@ export async function claudeRemoteLauncher(
                         const winner = await Promise.race([next, idle]).finally(() => clearTimeout(idleTimer));
                         if (winner !== 'idle') return winner;
                         const now = Date.now();
-                        if (launchStartedScheduledProviderWork || !isProviderIdleForExit()) {
+                        if (launchStartedResidentProviderWork || !isProviderIdleForExit()) {
                             lastBusyAtMs = now;
                             waitMs = idleExitMs;
                             continue;
@@ -1741,7 +1753,6 @@ export async function claudeRemoteLauncher(
                         if (pending) {
                             const p = pending;
                             pending = null;
-                            modeHash = p.hash;
                             mode = p.mode;
                             unifiedTerminalLaunchOptionsHash = p.mode.claudeUnifiedTerminalEnabled === true
                                 ? hashClaudeUnifiedTerminalLaunchOptionsForQueue(p.mode)
@@ -1767,7 +1778,8 @@ export async function claudeRemoteLauncher(
                         }
 
                         // Check if mode has changed
-                        const hashChanged = Boolean(modeHash && msg.hash !== modeHash);
+                        const hashChanged = mode !== null
+                            && hashClaudeEnhancedModeForLaunch(msg.mode) !== hashClaudeEnhancedModeForLaunch(mode);
                         if (shouldTreatModeChangeAsRelaunchBoundary(mode, msg.mode, hashChanged, msg.isolate)) {
                             logger.debug('[remote]: mode has changed, pending message');
                             pending = msg;
@@ -1784,7 +1796,6 @@ export async function claudeRemoteLauncher(
                         if (shouldSurfaceUnifiedTerminalRestartOnlyOptionsNotice(mode, msg.mode, unifiedTerminalLaunchOptionsChanged)) {
                             surfaceUnifiedTerminalRestartOnlyOptionsNotice(mode, msg.mode, nextUnifiedTerminalLaunchOptionsHash ?? msg.hash);
                         }
-                        modeHash = msg.hash;
                         const nextMode = msg.mode;
                         mode = nextMode;
                         unifiedTerminalLaunchOptionsHash = nextUnifiedTerminalLaunchOptionsHash;
@@ -2407,7 +2418,6 @@ export async function claudeRemoteLauncher(
                 await permissionHandler.resetAndFlush();
                 turnChangeTracker.resetTurn();
                 suppressedExplicitDiffCallIds.clear();
-                modeHash = null;
                 mode = null;
                 unifiedTerminalLaunchOptionsHash = null;
                 // Session IDs can change during a remote run (system init / resume / fork / compact).

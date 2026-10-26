@@ -5,7 +5,7 @@ const envScope = createEnvKeyScope([
   'HAPPIER_CLAUDE_REMOTE_IDLE_EXIT_MS',
 ]);
 
-async function loadIdleExitMs(value: string | undefined): Promise<number> {
+async function loadIdleExitMs(value: string | undefined): Promise<number | null> {
   if (value === undefined) delete process.env.HAPPIER_CLAUDE_REMOTE_IDLE_EXIT_MS;
   else process.env.HAPPIER_CLAUDE_REMOTE_IDLE_EXIT_MS = value;
   vi.resetModules();
@@ -19,9 +19,10 @@ describe('configuration claudeRemoteIdleExitMs', () => {
     vi.resetModules();
   });
 
-  it('defaults to 30 minutes and lets 0 disable idle exit', async () => {
-    expect(await loadIdleExitMs(undefined)).toBe(30 * 60_000);
+  it('leaves the app timeout authoritative by default and lets 0 disable idle exit', async () => {
+    expect(await loadIdleExitMs(undefined)).toBeNull();
     expect(await loadIdleExitMs('0')).toBe(0);
+    expect(await loadIdleExitMs('invalid')).toBeNull();
   });
 
   it('caps oversized values at the longest delay a timer can wait instead of overflowing to an immediate exit', async () => {

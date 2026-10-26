@@ -47,10 +47,10 @@ export type ShellBridgeContextEnvMode = 'off' | 'home' | 'full';
  * - If `opts.max` is specified, the value is clamped to that upper bound.
  * - Otherwise the `opts.default` value is returned.
  */
-function resolveIntEnvWithBounds(
+function resolveIntEnvWithBounds<Default extends number | null>(
   envVar: string,
-  opts: { min?: number; max?: number; default: number },
-): number {
+  opts: { min?: number; max?: number; default: Default },
+): number | Default {
   const raw = String(process.env[envVar] ?? '').trim()
   const parsed = Number.parseInt(raw, 10)
   const min = opts.min ?? 1
@@ -299,7 +299,7 @@ class Configuration {
   // Claude remote launcher: grace window between requesting a turn interrupt and force-aborting
   // the underlying Claude Code subprocess during teardown (switch/exit).
   public readonly claudeRemoteInterruptThenTeardownGraceMs: number
-  public readonly claudeRemoteIdleExitMs: number
+  public readonly claudeRemoteIdleExitMs: number | null
   public readonly claudeLocalAbortEscalateAfterMs: number
   public readonly claudeLocalAbortKillAfterMs: number
 
@@ -810,12 +810,12 @@ class Configuration {
       { min: 0, max: 30_000, default: 5_000 },
     );
 
-    // Default: 30 minutes. A remote Claude child (and the MCP servers it spawned) that has been idle
-    // this long is stopped and resumed with the same Claude session on the next prompt. 0 disables.
+    // Optional timeout override after the user opts in through Claude settings. An absent or invalid
+    // value leaves the app timeout authoritative; 0 disables reclamation even when opted in.
     // Capped at the longest delay setTimeout supports; Node fires larger delays after 1 ms.
     this.claudeRemoteIdleExitMs = resolveIntEnvWithBounds(
       'HAPPIER_CLAUDE_REMOTE_IDLE_EXIT_MS',
-      { min: 0, max: 2 ** 31 - 1, default: 30 * 60_000 },
+      { min: 0, max: 2 ** 31 - 1, default: null },
     );
 
     // Default: 3000ms. On local mode switching we send SIGINT first, then give Claude Code some time
