@@ -8,22 +8,21 @@
 
 import type { ChildProcess } from 'node:child_process';
 import spawn from 'cross-spawn';
-import {
-  RequestError,
-  type SessionNotification,
-  type RequestPermissionRequest,
-  type RequestPermissionResponse,
-  type InitializeRequest,
-  type InitializeResponse,
-  type NewSessionRequest,
-  type ForkSessionRequest,
-  type ListSessionsRequest,
-  type LoadSessionRequest,
-  type PromptRequest,
-  type PromptResponse,
-  type SetSessionModeRequest,
-  type SetSessionConfigOptionRequest,
-  type ContentBlock,
+import type {
+  SessionNotification,
+  RequestPermissionRequest,
+  RequestPermissionResponse,
+  InitializeRequest,
+  InitializeResponse,
+  NewSessionRequest,
+  ForkSessionRequest,
+  ListSessionsRequest,
+  LoadSessionRequest,
+  PromptRequest,
+  PromptResponse,
+  SetSessionModeRequest,
+  SetSessionConfigOptionRequest,
+  ContentBlock,
 } from '@agentclientprotocol/sdk';
 import { redactBugReportSensitiveText } from '@happier-dev/protocol';
 import { randomUUID } from 'node:crypto';
@@ -118,6 +117,7 @@ import {
   createAcpClientConnection,
   type AcpClientConnection,
 } from './connection/createAcpClientConnection';
+import { isAcpRequestError, loadAcpSdk } from './connection/acpSdk';
 import type {
   AcpClientConnectionHandlers,
   AcpExtensionHandlerContext,
@@ -138,7 +138,6 @@ function makeAbortError(message: string): Error {
 }
 
 function isAcpJsonRpcRejection(error: unknown): boolean {
-  if (error instanceof RequestError) return true;
   if (!error || typeof error !== 'object' || Array.isArray(error)) return false;
   const record = error as Record<string, unknown>;
   return typeof record.code === 'number' && Number.isFinite(record.code) && typeof record.message === 'string';
@@ -1192,6 +1191,8 @@ export class AcpBackend implements AgentBackend {
     this.lastProcessExitDetail = null;
 
     try {
+      // Load before spawning so the child's startup is not raced against SDK module I/O.
+      await loadAcpSdk();
       const preparedLaunch = await this.options.prepareProcessLaunch?.();
       this.processLaunchCleanup = preparedLaunch?.cleanup ?? null;
 
@@ -1680,7 +1681,7 @@ export class AcpBackend implements AgentBackend {
         })
       );
     }
-    this.connection = createAcpClientConnection({
+    this.connection = await createAcpClientConnection({
       name: 'happier-cli',
       transport: stream,
       isAuthenticationSetupFailure: this.options.isAuthenticationSetupFailure,
@@ -2056,7 +2057,7 @@ export class AcpBackend implements AgentBackend {
       };
 
       const response = await connection.peer.forkSession(request).catch((error) => {
-        if (error instanceof RequestError && error.code === -32601) {
+        if (isAcpRequestError(error) && error.code === -32601) {
           throw new Error(`${this.transport.agentName} does not support ACP session/fork`);
         }
         throw error;

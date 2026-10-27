@@ -12,7 +12,7 @@ import type {
   WriteTextFileRequest,
   WriteTextFileResponse,
 } from '@agentclientprotocol/sdk';
-import { RequestError } from '@agentclientprotocol/sdk';
+import { isAcpRequestError, requireLoadedAcpSdk } from './acpSdk';
 import type { AcpPlanProjection, NormalizedAcpPlanSnapshot } from '../plans';
 import type { AcpToolCallTracker } from '../updates/toolCalls/AcpToolCallTracker';
 
@@ -60,10 +60,10 @@ function parseExtensionParams<Params>(parser: ParamsParser<Params>, value: unkno
   try {
     return typeof parser === 'function' ? parser(value) : parser.parse(value);
   } catch (error) {
-    if (error instanceof RequestError) {
+    if (isAcpRequestError(error)) {
       throw error;
     }
-    throw RequestError.invalidParams(
+    throw requireLoadedAcpSdk().RequestError.invalidParams(
       { details: 'Extension parameters failed validation' },
     );
   }
