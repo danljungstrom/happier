@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DEFAULT_REQUEST_TIMEOUT_MSEC } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { z } from 'zod/v4';
+import { lazySchema } from '@happier-dev/protocol';
 
 import { logger } from '@/ui/logger';
 import { requireProviderCliCommand } from '@/runtime/managedTools/requireProviderCliCommand';
@@ -17,12 +18,12 @@ import { getCodexElicitationToolCallId, getCodexEventToolCallId } from './mcp/el
 import { withCodexNativeStartupLock } from './utils/withCodexNativeStartupLock';
 
 const DEFAULT_TIMEOUT = 14 * 24 * 60 * 60 * 1000; // 14 days
-const CodexEventNotificationSchema = z.object({
+const CodexEventNotificationSchema = lazySchema(() => z.object({
     method: z.literal('codex/event'),
     params: z.object({
         msg: z.any()
     })
-}).passthrough() as any;
+}).passthrough()) as any;
 
 export { getCodexElicitationToolCallId, getCodexEventToolCallId };
 

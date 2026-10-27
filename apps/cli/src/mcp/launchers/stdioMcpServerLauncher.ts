@@ -2,14 +2,15 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 
 import { z } from 'zod';
+import { lazySchema } from '@happier-dev/protocol';
 
 
-const StdioMcpServerLauncherConfigSchema = z.object({
+const StdioMcpServerLauncherConfigSchema = lazySchema(() => z.object({
   command: z.string().min(1),
   args: z.array(z.string()).optional().default([]),
   env: z.record(z.string(), z.string()).optional().default({}),
   cwd: z.string().min(1).optional(),
-});
+}));
 
 type StdioMcpServerLauncherConfig = z.infer<typeof StdioMcpServerLauncherConfigSchema>;
 
