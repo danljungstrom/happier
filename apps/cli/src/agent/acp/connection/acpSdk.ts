@@ -15,7 +15,14 @@ let loaded: AcpSdk | undefined;
 let loading: Promise<AcpSdk> | undefined;
 
 export function loadAcpSdk(): Promise<AcpSdk> {
-  loading ??= import('@agentclientprotocol/sdk').then((sdk) => (loaded = sdk));
+  loading ??= import('@agentclientprotocol/sdk').then(
+    (sdk) => (loaded = sdk),
+    (error: unknown) => {
+      // Do not pin a failed load for the life of a long-lived process (daemon probes).
+      loading = undefined;
+      throw error;
+    },
+  );
   return loading;
 }
 

@@ -1195,6 +1195,10 @@ export class AcpBackend implements AgentBackend {
       await loadAcpSdk();
       const preparedLaunch = await this.options.prepareProcessLaunch?.();
       this.processLaunchCleanup = preparedLaunch?.cleanup ?? null;
+      // dispose() may have finished during the awaits above; it found no child to stop.
+      if (this.disposed) {
+        throw new Error('Backend has been disposed');
+      }
 
       // Spawn the ACP agent process.
       // Use cross-spawn so Windows quoting/.cmd resolution is handled safely without joining args.

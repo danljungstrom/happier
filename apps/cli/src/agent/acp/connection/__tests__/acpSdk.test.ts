@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const SRC_ROOT = join(__dirname, '..', '..', '..', '..');
 const SDK_VALUE_IMPORT = /^\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\sfrom\s+)?['"]@agentclientprotocol\/sdk(?:\/[^'"]*)?['"]/m;
@@ -24,5 +24,20 @@ describe('ACP SDK loading', () => {
       .map((path) => relative(SRC_ROOT, path));
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('loadAcpSdk', () => {
+  it('retries after a failed load instead of caching the failure', async () => {
+    vi.resetModules();
+    vi.doMock('@agentclientprotocol/sdk', () => {
+      throw new Error('simulated SDK load failure');
+    });
+    const { loadAcpSdk } = await import('../acpSdk');
+    await expect(loadAcpSdk()).rejects.toThrow();
+
+    vi.doUnmock('@agentclientprotocol/sdk');
+    vi.resetModules();
+    await expect(loadAcpSdk()).resolves.toHaveProperty('RequestError');
   });
 });
