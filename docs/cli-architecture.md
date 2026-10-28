@@ -1808,7 +1808,22 @@ Active Session RPC checks and CLI/MCP checks route account-owned attempts to
 that same scheduler; ordinary live waits use the shared session controller.
 Account-switch and reset-credit controls keep their existing owners. A failed
 daemon check does not fall back to a competing provider-local scheduler.
-Native usage limits do not enter connected-service authentication recovery.
+Daemon source authorization declines recovery when the tracked Session has no
+Connected Account binding, so native-login waits remain Session-owned. A
+provider-started Codex goal turn can lack member attribution even in a pool
+Session; its accepted failure still reaches daemon intake. Intake binds it to
+the tracked pool while leaving the failed member unknown, and the existing
+switch pipeline probes candidates without assigning a limiter to an unproven
+member. The daemon projects that pool wait even when its profile is null.
+Codex app-server's accepted terminal failure owns the report; account-change and
+temporary-capacity presentation retain prompt-loop handling without a second
+report, and provider-owned intra-turn retries remain nonterminal.
+
+After a successful Codex continuation, the runtime re-reads a previously
+usage-limited native goal and uses the existing status-only goal setter to
+reactivate it if its status remains `usageLimited`. Objective, budget and counters
+are preserved, as are intervening Pause and Complete actions.
+
 Explicit user input is admitted through Pending rather
 than waking an automatic continuation during pre-admission revalidation; the
 existing dispatcher suppresses obsolete continuation when newer input is queued.
