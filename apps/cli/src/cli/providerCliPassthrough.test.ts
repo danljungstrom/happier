@@ -15,9 +15,13 @@ const { resolveWindowsCommandInvocationMock, requireProviderCliLaunchSpecMock, s
   spawnSyncMock: vi.fn(),
 }));
 
-vi.mock('@happier-dev/cli-common/process', () => ({
-  resolveWindowsCommandInvocation: resolveWindowsCommandInvocationMock,
-}));
+vi.mock('@happier-dev/cli-common/process', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@happier-dev/cli-common/process')>();
+  return {
+    ...original,
+    resolveWindowsCommandInvocation: resolveWindowsCommandInvocationMock,
+  };
+});
 
 vi.mock('@/runtime/managedTools/requireProviderCliLaunchSpec', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/runtime/managedTools/requireProviderCliLaunchSpec')>();
