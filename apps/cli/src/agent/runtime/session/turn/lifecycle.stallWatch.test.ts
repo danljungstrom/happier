@@ -54,6 +54,8 @@ describe('SessionTurnLifecycle turn stall watch', () => {
             lastEventAgeMs: STALL_WARN_MS,
             provider: 'claude',
             providerTurnId: 'provider-turn-1',
+            sessionId: 'stall-watch',
+            turnId: 'session-turn:stall-turn',
         }]);
 
         h.advance(3_600_000);
@@ -76,6 +78,28 @@ describe('SessionTurnLifecycle turn stall watch', () => {
         h.advance(STALL_WARN_MS);
         expect(h.notices).toHaveLength(2);
         expect(h.notices[1]).toMatchObject({ stallMs: STALL_WARN_MS, provider: 'claude' });
+    });
+
+    it('does not reset or re-arm the stopwatch when steering an already-active turn', async () => {
+        const h = createStallWatchHarness({ stallWarnMs: STALL_WARN_MS });
+        await h.lifecycle.beginTurn({ provider: 'claude' });
+        expect(vi.getTimerCount()).toBe(1);
+
+        h.advance(STALL_WARN_MS - 300_000);
+        await h.lifecycle.beginTurn({ provider: 'claude', providerTurnId: 'steer-1' });
+        expect(vi.getTimerCount()).toBe(1);
+
+        // The original silence window keeps running: the notice fires exactly
+        // STALL_WARN_MS after the FIRST begin, not after the steer re-begin.
+        h.advance(300_000);
+        expect(h.notices).toHaveLength(1);
+        expect(h.notices[0]).toMatchObject({
+            stallMs: STALL_WARN_MS,
+            lastEventAgeMs: STALL_WARN_MS,
+            turnId: 'session-turn:stall-turn',
+        });
+        h.advance(STALL_WARN_MS);
+        expect(h.notices).toHaveLength(1);
     });
 
     it('disarms the watch when the turn reaches a terminal state', async () => {

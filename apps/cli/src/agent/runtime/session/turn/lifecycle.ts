@@ -148,6 +148,8 @@ export function createSessionTurnLifecycle(
         ...(params.turnStallWarnMs !== undefined ? { stallWarnMs: params.turnStallWarnMs } : {}),
         now,
         describeActiveTurn: () => activeTurn === null ? null : {
+            sessionId: params.sessionId,
+            turnId: activeTurn.turnId,
             ...(activeTurn.provider ? { provider: activeTurn.provider } : {}),
             ...(activeTurn.providerTurnId ? { providerTurnId: activeTurn.providerTurnId } : {}),
         },

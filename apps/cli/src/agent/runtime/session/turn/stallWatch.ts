@@ -17,6 +17,10 @@ export type TurnStallNotice = Readonly<{
     stallMs: number;
     /** Age of the last provider message event, measured at notice time. */
     lastEventAgeMs: number;
+    /** Owning session, so multi-session daemon logs attribute the episode. */
+    sessionId?: string;
+    /** Session-owned turn id in flight during the silent episode. */
+    turnId?: string;
     provider?: string;
     providerTurnId?: string;
 }>;
@@ -54,7 +58,12 @@ export type TurnStallWatch = Readonly<{
 export function createTurnStallWatchdog(params: Readonly<{
     stallWarnMs?: number;
     now: () => number;
-    describeActiveTurn: () => Readonly<{ provider?: string; providerTurnId?: string }> | null;
+    describeActiveTurn: () => Readonly<{
+        sessionId?: string;
+        turnId?: string;
+        provider?: string;
+        providerTurnId?: string;
+    }> | null;
     onStallNotice?: (notice: TurnStallNotice) => void;
 }>): TurnStallWatch {
     const stallWarnMs = params.stallWarnMs !== undefined
@@ -84,6 +93,8 @@ export function createTurnStallWatchdog(params: Readonly<{
             onStallNotice({
                 stallMs: stallWarnMs,
                 lastEventAgeMs: Math.max(0, nowMs - lastEventAt),
+                ...(described.sessionId ? { sessionId: described.sessionId } : {}),
+                ...(described.turnId ? { turnId: described.turnId } : {}),
                 ...(described.provider ? { provider: described.provider } : {}),
                 ...(described.providerTurnId ? { providerTurnId: described.providerTurnId } : {}),
             });

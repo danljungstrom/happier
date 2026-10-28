@@ -4331,6 +4331,9 @@ export class ApiSessionClient extends EventEmitter {
     recordClaudeJsonlMessageConsumed(body: RawJSONLines, meta?: Record<string, unknown>): void {
         const key = buildClaudeJsonlMessageKey(body);
         if (!key) return;
+        // Unified-terminal echo suppression: the provider really emitted (and is
+        // consuming) this echo, so it counts as provider liveness for the stall watch.
+        this.notifyTurnStallWatchProviderEvent();
         const sidechainId = readNonBlankOpaqueIdentifier((body as Record<string, unknown>).sidechainId);
         const content = {
             role: 'agent',
