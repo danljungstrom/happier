@@ -7,6 +7,7 @@ import { getCodexElicitationToolCallId as getCodexElicitationToolCallIdFromModul
 import { createEnvKeyScope } from '@/testkit/env/envScope';
 import { createExecutableShim } from '@/testkit/fs/executableShim';
 import { removeTempDir } from '@/testkit/fs/tempDir';
+import { createSessionTurnLifecycle } from '@/agent/runtime/session/turn/lifecycle';
 
 // NOTE: This test suite uses mocks because the real Codex CLI / MCP transport
 // is not guaranteed to be available in CI or local test environments.
@@ -115,23 +116,41 @@ describe('CodexMcpClient provider backflow', () => {
         }
     });
 
-    it('observes no-output native events only for the selected session', async () => {
-        const { CodexMcpClient } = await import('./codexMcpClient');
-        const observed: unknown[] = [];
-        const client = new CodexMcpClient({ onProviderTurnEvent: () => observed.push('provider-event') });
-        client.setThreadIdForResume('selected-thread');
-        const receive = nativeNotificationHandlers.at(-1)!;
-        receive({ params: { msg: { type: 'token_count', thread_id: 'foreign-thread' } } });
-        expect(observed).toEqual([]);
-        expect(client.getSessionId()).toBe('selected-thread');
-        receive({ params: { msg: { type: 'error', thread_id: 'selected-thread' } } });
-        expect(observed).toEqual(['provider-event']);
-        // The dedicated MCP transport can omit the session on individual turn events.
-        receive({ params: { msg: { type: 'token_count' } } });
-        expect(observed).toEqual(['provider-event', 'provider-event']);
-        receive({ params: { msg: null } });
-        expect(observed).toEqual(['provider-event', 'provider-event']);
+    it.each([
+        { thread_id: 'selected-thread', threadId: 'foreign-thread' },
+        { session_id: 'selected-thread', sessionId: 'foreign-thread' },
+        { thread_id: 'selected-thread', data: { threadId: 'foreign-thread' } },
+    ])('rejects ambiguous native thread identity without postponing silence (%j)', async (conflictingIdentity) => {
+        vi.useFakeTimers();
+        const notices: unknown[] = [];
+        const lifecycle = createSessionTurnLifecycle({
+            sessionId: 'mcp-selected-session', turnStallWarnMs: 1000,
+            enqueueSessionTurn: async () => {},
+            onTurnStallNotice: (notice) => notices.push(notice),
+        });
+        try {
+            const { CodexMcpClient } = await import('./codexMcpClient');
+            const client = new CodexMcpClient({ onProviderTurnEvent: () => lifecycle.observeProviderTurnEvent() });
+            client.setThreadIdForResume('selected-thread');
+            const receive = nativeNotificationHandlers.at(-1)!;
+            await lifecycle.beginTurn({ provider: 'codex' });
+            await vi.advanceTimersByTimeAsync(600);
+            // SessionId and ThreadId are distinct in rust-v0.160.0 protocol.rs;
+            // the explicit thread identifies ownership, rather than session equality.
+            receive({ params: { msg: { type: 'session_configured', thread_id: 'selected-thread', session_id: 'runtime-session' } } });
+            await vi.advanceTimersByTimeAsync(600);
+            expect(notices).toEqual([]);
+            receive({ params: { msg: { type: 'token_count', ...conflictingIdentity } } });
+            expect(client.getSessionId()).toBe('selected-thread');
+            await vi.advanceTimersByTimeAsync(400);
+            expect(notices).toHaveLength(1);
+            expect(notices[0]).toMatchObject({ lastEventAgeMs: 1000 });
+        } finally {
+            await lifecycle.endSession();
+            vi.useRealTimers();
+        }
     });
+
 });
 
 describe('CodexMcpClient elicitation ids', () => {

@@ -32,6 +32,7 @@ describe('createClaudeUnifiedHookLifecycleBridge', () => {
       subscribeClaudeSessionHooks: callback => { hook = callback; return () => { hook = undefined; }; },
       arbiter, completionQuiescenceMs: 0,
       onProviderEvent: () => turn.observeProviderTurnEvent(),
+      readProviderSessionId: () => 'native-main',
     });
     try {
       await turn.beginTurn({ provider: 'claude' });
@@ -42,10 +43,14 @@ describe('createClaudeUnifiedHookLifecycleBridge', () => {
       hook?.({ hook_event_name: 'PostToolUse', session_id: 'native-main' }, { startupReplay: true, observedAt: 0 });
       hook?.({ hook_event_name: 'PostToolUse', session_id: 'native-main', agent_id: 'child' });
       hook?.({ hook_event_name: 'PermissionRequestCompleted', session_id: 'native-main' });
+      hook?.({ hook_event_name: 'PostToolUse', session_id: 'stale-native-session' });
       await vi.advanceTimersByTimeAsync(24);
       expect(notices).toEqual([]);
       await vi.advanceTimersByTimeAsync(1);
       expect(notices).toMatchObject([{ lastEventAgeMs: 100 }]);
+      hook?.({ hook_event_name: 'SessionStart', source: 'compact', session_id: 'native-next' });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(notices).toHaveLength(2);
     } finally {
       bridge.dispose();
       await arbiter.dispose();

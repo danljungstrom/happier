@@ -749,7 +749,7 @@ export async function claudeRemoteLauncher(
     });
     const observeLegacyProviderActivityHook = (hook: SessionHookData): void => {
         if (activeRemoteRunnerKind !== 'legacy') return;
-        if (isLivePrimaryClaudeProviderHook(hook)) {
+        if (isLivePrimaryClaudeProviderHook(hook, session.sessionId)) {
             session.client.sessionTurnLifecycle?.observeProviderTurnEvent();
         }
         workflowActivitySource?.observeTranscriptMessage(hook, { historicalReplay: false, authenticatedHook: true });

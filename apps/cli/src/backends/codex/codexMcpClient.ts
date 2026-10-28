@@ -207,24 +207,24 @@ export class CodexMcpClient {
         if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
             candidates.push(record.data as Record<string, unknown>);
         }
-        // Thread selection comes from start/resume responses. A child/foreign event
-        // must neither retarget the client nor count as primary-turn backflow.
-        if (this.threadId && candidates.some((candidate) => {
-            const id = candidate.thread_id ?? candidate.threadId ?? candidate.session_id ?? candidate.sessionId;
-            return typeof id === 'string' && id !== this.threadId;
-        })) return false;
+        // Explicit thread identity takes precedence over the legacy session-id
+        // fallback. SessionId and ThreadId are distinct in newer native protocols.
+        const threadIds = candidates.flatMap((candidate) => [candidate.thread_id, candidate.threadId])
+            .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const identifiers = threadIds.length > 0 ? threadIds : candidates
+            .flatMap((candidate) => [candidate.session_id, candidate.sessionId])
+            .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const threadId = identifiers[0];
+        // One normalization decision governs both selection and primary backflow.
+        if (identifiers.some((id) => id !== threadId || (this.threadId !== null && id !== this.threadId))) {
+            return false;
+        }
+        if (threadId) {
+            this.threadId = threadId;
+            logger.debug('[CodexMCP] Thread ID extracted from event:', this.threadId);
+        }
 
         for (const candidate of candidates) {
-            const threadId =
-                candidate.thread_id
-                ?? candidate.threadId
-                ?? candidate.session_id
-                ?? candidate.sessionId;
-            if (typeof threadId === 'string' && threadId) {
-                this.threadId = threadId;
-                logger.debug('[CodexMCP] Thread ID extracted from event:', this.threadId);
-            }
-
             const conversationId = candidate.conversation_id ?? candidate.conversationId;
             if (typeof conversationId === 'string' && conversationId) {
                 this.conversationId = conversationId;

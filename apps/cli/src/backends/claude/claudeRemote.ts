@@ -36,7 +36,7 @@ import { normalizeCurrentHappierSessionId } from '@/agent/runtime/session/curren
 import { hasClaudeQueuedUserTurns } from './remote/resultTurnBoundary';
 import type { ClaudeEffectiveModelObservation } from './sessionModels/effectiveModelUpdate';
 import { readClaudeMainChainAssistantModelId } from './sessionModels/readClaudeMainChainAssistantModelId';
-import { isSidechainSessionHook } from './utils/sessionHookAttribution';
+import { isLivePrimaryClaudeProviderMessage, isSidechainSessionHook } from './utils/sessionHookAttribution';
 
 function buildClaudeEffortArgs(params: Readonly<{
     modelId: unknown;
@@ -327,13 +327,18 @@ export async function claudeRemote(opts: {
 
     const messages = new PushableAsyncIterable<SDKUserMessage>();
     let ownsQuery = true;
+    let currentProviderSessionId = startFrom;
     let unpublishedLaunchEffort: string | undefined = effortArgs[1];
     // Start the loop
     const response = query({
         prompt: messages,
         options: sdkOptions,
         onMessageReceived: (message) => {
-            if (!isReplaySdkMessage(message)) opts.onProviderEvent?.();
+            if (isLivePrimaryClaudeProviderMessage(message, id => !currentProviderSessionId || id === currentProviderSessionId)) {
+                if (message.type === 'system' && (message.subtype === 'init' || message.subtype === 'compact_boundary')
+                    && typeof message.session_id === 'string') currentProviderSessionId = message.session_id;
+                opts.onProviderEvent?.();
+            }
             if (promptSettlements.observeProviderMessage(message)) return;
             if (isClaudeHookLifecycleStreamMessage(message)) return;
             logger.debugLargeJson(`[claudeRemote] Message ${message.type}`, message);
@@ -389,7 +394,6 @@ export async function claudeRemote(opts: {
     opts.setTurnInterrupt?.(interruptTurn);
 
     updateThinking(true);
-    let currentProviderSessionId = startFrom;
     try {
         logger.debug(`[claudeRemote] Starting to iterate over response`);
 
@@ -407,7 +411,7 @@ export async function claudeRemote(opts: {
 
                 const systemInit = message as SDKSystemMessage;
                 if (systemInit.session_id) {
-                    currentProviderSessionId = systemInit.session_id;
+                    // Raw ingress already owns current identity; iterator lag must not rewind it.
                     // Do not block on filesystem writes here.
                     // The session scanner can handle missing files via watcher retries + UI warnings.
                     logger.debug(`[claudeRemote] Session initialized: ${systemInit.session_id}`);

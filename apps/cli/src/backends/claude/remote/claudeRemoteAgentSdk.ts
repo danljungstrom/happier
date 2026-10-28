@@ -118,7 +118,7 @@ import {
 } from '../connectedServices/claudeSubscriptionAccessTokenRefresh';
 import { resolveWindowsCommandInvocation } from '@happier-dev/cli-common/process';
 import type { ClaudeEffectiveModelObservation } from '../sessionModels/effectiveModelUpdate';
-import { isLivePrimaryClaudeProviderHook, isSidechainSessionHook } from '../utils/sessionHookAttribution';
+import { isLivePrimaryClaudeProviderHook, isLivePrimaryClaudeProviderMessage, isSidechainSessionHook } from '../utils/sessionHookAttribution';
 
 type AgentSdkQueryFactory = (params: {
     prompt: string | AsyncIterable<SDKUserMessage>;
@@ -616,7 +616,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
 	        getMode: () => mode,
 	        onSessionFound: (sessionId, data) => recordSessionFound(sessionId, data as any),
 	        onSessionHook: (data) => {
-	            if (isLivePrimaryClaudeProviderHook(data)) opts.onProviderEvent?.();
+	            if (isLivePrimaryClaudeProviderHook(data, latestClaudeSessionId)) opts.onProviderEvent?.();
 	            opts.onSessionHook?.(data);
 	            const activity = readClaudeSessionHookProviderTaskActivity(data);
 	            if (!activity) return;
@@ -1782,7 +1782,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
 
         let unpublishedLaunchEffort = resolvedUltracode ? 'xhigh' : queryOptions.effort;
         for await (const message of response as any) {
-            if (!isReplaySdkMessage(message)) opts.onProviderEvent?.();
+            if (isLivePrimaryClaudeProviderMessage(message, providerActivityLedger.isOwnedSessionId)) opts.onProviderEvent?.();
             const observedModelId = isReplaySdkMessage(message) ? null : readClaudeMainChainAssistantModelId(message);
             if (observedModelId) {
                 const launchEffort = unpublishedLaunchEffort;

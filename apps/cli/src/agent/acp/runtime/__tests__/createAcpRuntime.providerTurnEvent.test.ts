@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AcpBackend } from '@/agent/acp/AcpBackend';
 import { writeAcpTestAgentScript } from '@/agent/acp/testkit/subprocessHarness';
 import { createSessionTurnLifecycle } from '@/agent/runtime/session/turn/lifecycle';
+import type { TurnStallNotice } from '@/agent/runtime/session/turn/stallWatch';
 import { createTestAcpRuntime } from '@/testkit/backends/acpRuntime';
 import { createApprovedPermissionHandler } from '@/testkit/backends/permissionHandler';
 import { createBasicSessionClientWithOverrides } from '@/testkit/backends/sessionFixtures';
@@ -10,7 +11,7 @@ import { withTempDir } from '@/testkit/fs/tempDir';
 import { MessageBuffer } from '@/ui/ink/messageBuffer';
 
 describe('createAcpRuntime provider activity ingress', () => {
-  it('delivers unrendered native activity to the real turn lifecycle before transcript filtering', async () => {
+  it('postpones a silence notice on native ingress before a permission wait, then reports continued silence once', async () => {
     await withTempDir('happier-acp-provider-activity-', async (dir) => {
       const script = writeAcpTestAgentScript({ dir, fileName: 'provider.mjs', source: `
         let buffer = '';
@@ -47,26 +48,57 @@ describe('createAcpRuntime provider activity ingress', () => {
           }
         });
       ` });
-      const backend = new AcpBackend({ agentName: 'test', cwd: dir, command: process.execPath, args: [script] });
-      const lifecycle = createSessionTurnLifecycle({ sessionId: 'happier-session', enqueueSessionTurn: async () => {} });
-      // Observe the real lifecycle without replacing its behavior.
-      const observed = vi.spyOn(lifecycle, 'observeProviderTurnEvent');
+      let permissionEntered!: () => void;
+      const permissionWaiting = new Promise<void>((resolve) => { permissionEntered = resolve; });
+      let approveWrite!: (value: { decision: 'approved' }) => void;
+      const approval = new Promise<{ decision: 'approved' }>((resolve) => { approveWrite = resolve; });
+      const backend = new AcpBackend({
+        agentName: 'test', cwd: dir, command: process.execPath, args: [script],
+        // User approval is the external boundary; the ACP SDK, filesystem and lifecycle remain real.
+        permissionHandler: { handleToolCall: async () => { permissionEntered(); return approval; } },
+      });
+      const notices: TurnStallNotice[] = [];
+      const lifecycle = createSessionTurnLifecycle({
+        sessionId: 'happier-session', enqueueSessionTurn: async () => {},
+        now: () => Date.now(),
+        turnStallWarnMs: 1000, onTurnStallNotice: (notice) => { notices.push(notice); },
+      });
       const runtime = createTestAcpRuntime({
         provider: 'customAcp', directory: dir, messageBuffer: new MessageBuffer(), mcpServers: {},
         permissionHandler: createApprovedPermissionHandler(), onThinkingChange: () => {},
         ensureBackend: async () => backend,
         session: createBasicSessionClientWithOverrides({ sessionTurnLifecycle: lifecycle }),
       });
+      let sending: Promise<void> | null = null;
       try {
         await runtime.startOrLoad({});
-        expect(observed).not.toHaveBeenCalled();
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+        vi.setSystemTime(0);
+        await lifecycle.beginTurn({ provider: 'customAcp' });
         runtime.beginTurn();
-        await runtime.sendPrompt('hello');
-        expect(observed).toHaveBeenCalledTimes(3);
+        await vi.advanceTimersByTimeAsync(600);
+        sending = runtime.sendPrompt('hello');
+        void sending.catch(() => {}); // The assertion path awaits it; cleanup also drains failed attempts.
+        await permissionWaiting;
+        await vi.advanceTimersByTimeAsync(400);
+        expect(notices).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(599);
+        expect(notices).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(notices).toEqual([expect.objectContaining({
+          stallMs: 1000, lastEventAgeMs: 1000, sessionId: 'happier-session',
+        })]);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(notices).toHaveLength(1);
+        approveWrite({ decision: 'approved' });
+        await sending;
       } finally {
+        approveWrite({ decision: 'approved' });
+        await sending?.catch(() => {});
+        lifecycle.dispose();
+        vi.useRealTimers();
         await runtime.reset();
         await lifecycle.endSession();
-        observed.mockRestore();
       }
     });
   });

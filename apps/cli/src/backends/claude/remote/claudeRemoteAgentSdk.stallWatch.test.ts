@@ -76,7 +76,7 @@ it('observes a main permission request before its decision and excludes replayed
     }
 });
 
-it('observes live SDK events before buffering while replay cannot postpone a stall notice', async () => {
+it('observes live SDK events before buffering while replay, foreign sessions and sidechains cannot postpone a stall notice', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const notices: TurnStallNotice[] = [];
@@ -92,23 +92,29 @@ it('observes live SDK events before buffering while replay cannot postpone a sta
         async *[Symbol.asyncIterator]() {
             yield { type: 'system', subtype: 'init', session_id: 'native-main' } as SDKMessage;
             await vi.advanceTimersByTimeAsync(75);
+            yield { type: 'system', subtype: 'compact_boundary', session_id: 'native-compacted', compact_metadata: { trigger: 'auto', pre_tokens: 1 } } as SDKMessage;
+            await vi.advanceTimersByTimeAsync(99);
+            expect(notices).toEqual([]);
             yield {
-                type: 'stream_event', session_id: 'native-main', parent_tool_use_id: null,
+                type: 'stream_event', session_id: 'native-compacted', parent_tool_use_id: null,
                 event: { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tool-1', name: 'Write', input: {} } },
             } as SDKMessage;
             await vi.advanceTimersByTimeAsync(75);
             yield {
-                type: 'stream_event', session_id: 'native-main', parent_tool_use_id: null,
+                type: 'stream_event', session_id: 'native-compacted', parent_tool_use_id: null,
                 event: { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"content":"still generating' } },
             } as SDKMessage;
             await vi.advanceTimersByTimeAsync(75);
-            yield { type: 'rate_limit_event', session_id: 'native-main', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' } } as SDKMessage;
+            yield { type: 'rate_limit_event', session_id: 'native-compacted', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' } } as SDKMessage;
             await vi.advanceTimersByTimeAsync(99);
             expect(notices).toEqual([]);
-            yield { type: 'rate_limit_event', session_id: 'native-main', isReplay: true } as unknown as SDKMessage;
+            yield { type: 'rate_limit_event', session_id: 'native-compacted', isReplay: true } as unknown as SDKMessage;
+            yield { type: 'rate_limit_event', session_id: 'foreign-session' } as SDKMessage;
+            yield { type: 'rate_limit_event', session_id: 'native-compacted', parent_tool_use_id: 'child' } as unknown as SDKMessage;
+            yield { type: 'rate_limit_event', session_id: 'native-compacted', isSidechain: true } as unknown as SDKMessage;
             await vi.advanceTimersByTimeAsync(1);
             expect(notices).toMatchObject([{ lastEventAgeMs: 100 }]);
-            yield { type: 'result', subtype: 'success', session_id: 'native-main' } as SDKMessage;
+            yield { type: 'result', subtype: 'success', session_id: 'native-compacted' } as SDKMessage;
         },
         close() {}, async setPermissionMode() {}, async setModel() {}, async setMaxThinkingTokens() {},
         supportedCommands: async () => [], supportedModels: async () => [],

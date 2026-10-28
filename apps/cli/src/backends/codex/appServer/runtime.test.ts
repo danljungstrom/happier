@@ -8703,23 +8703,64 @@ describe('createCodexAppServerRuntime', () => {
         }
     });
 
-    it('observes correlated native backflow even when it has no transcript update', async () => {
+    it('postpones silence on native token usage even without transcript output', async () => {
         const { root } = await createRuntimeFixture('happier-codex-app-server-stall-backflow-');
+        vi.useFakeTimers();
+        const notices: unknown[] = [];
         const lifecycle = createSessionTurnLifecycle({
-            sessionId: 'codex-native-backflow',
+            sessionId: 'codex-native-backflow', turnStallWarnMs: 1000,
             enqueueSessionTurn: async () => {},
+            onTurnStallNotice: (notice) => notices.push(notice),
         });
-        const observed = vi.spyOn(lifecycle, 'observeProviderTurnEvent');
+        let started: () => void = () => {};
+        const startDelivered = new Promise<void>((resolve) => { started = resolve; });
+        let releaseUsage: () => void = () => {};
+        const usageGate = new Promise<void>((resolve) => { releaseUsage = resolve; });
+        let usageReceived: () => void = () => {};
+        const usageDelivered = new Promise<void>((resolve) => { usageReceived = resolve; });
+        let releaseTerminal: () => void = () => {};
+        const terminalGate = new Promise<void>((resolve) => { releaseTerminal = resolve; });
         const session = createMutableApiSessionClientFixture({
-            metadata: createRuntimeMetadata(root),
-            overrides: { sessionTurnLifecycle: lifecycle },
+            metadata: createRuntimeMetadata(root), overrides: { sessionTurnLifecycle: lifecycle },
         });
-        const runtime = createCodexAppServerRuntime({ directory: root, session, onThinkingChange: vi.fn() });
-        await runtime.startOrLoad({});
-        await runtime.sendPrompt('bridge-token-usage');
-        // Exactly the native start, token-usage update, and terminal frame.
-        expect(observed).toHaveBeenCalledTimes(3);
-        await lifecycle.endSession();
+        const runtime = createCodexAppServerRuntime({
+            directory: root, session, onThinkingChange: vi.fn(),
+            createClient: async () => {
+                const client = await createCodexAppServerClient({ cwd: root });
+                return {
+                    ...client,
+                    registerNotificationHandler: (method, handler) => client.registerNotificationHandler(method, async (payload) => {
+                        if (method === 'thread/tokenUsage/updated') await usageGate;
+                        if (method === 'turn/completed') await terminalGate;
+                        const work = handler(payload);
+                        if (method === 'turn/started') started();
+                        if (method === 'thread/tokenUsage/updated') usageReceived();
+                        await work;
+                    }),
+                };
+            },
+        });
+        let prompt: Promise<void> | undefined;
+        try {
+            await runtime.startOrLoad({});
+            prompt = runtime.sendPrompt('bridge-token-usage');
+            await startDelivered;
+            await vi.advanceTimersByTimeAsync(600);
+            releaseUsage();
+            await usageDelivered;
+            await vi.advanceTimersByTimeAsync(600);
+            expect(notices).toEqual([]);
+            await vi.advanceTimersByTimeAsync(400);
+            expect(notices).toHaveLength(1);
+            expect(notices[0]).toMatchObject({ lastEventAgeMs: 1000 });
+        } finally {
+            releaseUsage();
+            releaseTerminal();
+            await lifecycle.endSession();
+            vi.useRealTimers();
+            await runtime.reset();
+            await prompt?.catch(() => {});
+        }
     });
 
     it('forwards thread token usage updates and patches the active model context window from runtime telemetry', async () => {

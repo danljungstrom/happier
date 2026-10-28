@@ -39,10 +39,29 @@ export function readSessionHookEventName(data: SessionHookData): string {
 }
 
 /** Provider ingress only: the permission bridge emits completion after a user decision. */
-export function isLivePrimaryClaudeProviderHook(data: SessionHookData): boolean {
+export function isLivePrimaryClaudeProviderHook(data: SessionHookData, expectedSessionId?: string | null): boolean {
+  const hookName = readSessionHookEventName(data);
+  const sessionId = data.session_id ?? data.sessionId;
   return !isReplaySdkMessage(data)
     && !isSidechainSessionHook(data)
-    && readSessionHookEventName(data) !== 'PermissionRequestCompleted';
+    && hookName !== 'PermissionRequestCompleted'
+    // SessionStart is discovery evidence for legitimate resume, fork and compaction transitions.
+    && (!expectedSessionId || hookName === 'SessionStart' || sessionId === expectedSessionId);
+}
+
+/** SDK message scope stays independent of hook discovery and provider-task lineage ownership. */
+export function isLivePrimaryClaudeProviderMessage(
+  value: unknown,
+  isOwnedSessionId: (sessionId: string) => boolean,
+): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || isReplaySdkMessage(value) || isClaudeSidechainRuntimeEvidence(value)) return false;
+  const message = value as Record<string, unknown>;
+  const sessionId = message.session_id ?? message.sessionId;
+  // The query's native identity notifications establish ownership before later message admission.
+  const establishesIdentity = message.type === 'system'
+    && (message.subtype === 'init' || message.subtype === 'compact_boundary');
+  return establishesIdentity || typeof sessionId !== 'string' || isOwnedSessionId(sessionId);
 }
 
 export function readSidechainSessionHookProviderTaskId(data: SessionHookData): string | null {
