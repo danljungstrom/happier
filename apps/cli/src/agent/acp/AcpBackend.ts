@@ -1193,6 +1193,9 @@ export class AcpBackend implements AgentBackend {
     try {
       // Load before spawning so the child's startup is not raced against SDK module I/O.
       await loadAcpSdk();
+      if (this.disposed) {
+        throw new Error('Backend has been disposed');
+      }
       const preparedLaunch = await this.options.prepareProcessLaunch?.();
       this.processLaunchCleanup = preparedLaunch?.cleanup ?? null;
       // dispose() may have finished during the awaits above; it found no child to stop.
