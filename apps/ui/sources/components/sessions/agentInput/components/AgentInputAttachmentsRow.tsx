@@ -124,6 +124,7 @@ const stylesheet = StyleSheet.create((theme) => ({
 export const AgentInputAttachmentsRow = React.memo(function AgentInputAttachmentsRow(props: Readonly<{
     attachments: readonly AgentInputAttachment[];
     composerBadges?: readonly AgentInputComposerAttachmentBadge[];
+    removeDisabled?: boolean;
 }>) {
     const styles = stylesheet;
     const { theme } = useUnistyles();
@@ -203,7 +204,7 @@ export const AgentInputAttachmentsRow = React.memo(function AgentInputAttachment
                     );
                 })}
                 {props.attachments.map((att) => {
-                    const removingDisabled = att.status === 'uploading';
+                    const removingDisabled = props.removeDisabled === true || att.status === 'uploading';
                     const percent = att.status === 'uploading' ? resolveUploadProgressPercent(att.uploadProgress) : null;
                     const imagePreviewUri =
                         att.preview?.kind === 'image' && typeof att.preview.uri === 'string' && att.preview.uri.trim().length > 0
