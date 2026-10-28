@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import * as fs from 'node:fs';
 
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
+import { createSessionTurnLifecycle } from '@/agent/runtime/session/turn/lifecycle';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
 import type { AgentState, Metadata } from '@/api/types';
 import { createSessionRuntimeActivity } from '@/session/runtimeActivity/createSessionRuntimeActivity';
@@ -108,20 +109,10 @@ function createHarness(providerTasks?: SessionRuntimeActivityContributionHandle,
     sendAgentMessageCommitted: vi.fn(async () => {}),
     recordClaudeJsonlMessageConsumed: vi.fn(),
     keepAlive: vi.fn(),
-    sessionTurnLifecycle: {
-      beginTurn: vi.fn(async () => ({ turnId: 'turn-1' })),
-      attachProviderTurnId: vi.fn(async () => {}),
-      appendTranscriptAnchors: vi.fn(async () => {}),
-      completeTurn: vi.fn(async () => {}),
-      failTurn: vi.fn(async () => {}),
-      cancelTurn: vi.fn(async () => {}),
-      endSession: vi.fn(async () => {}),
-      markRollbackEligible: vi.fn(async () => {}),
-      markRolledBack: vi.fn(async () => {}),
-      touchActiveTurn: vi.fn(async () => {}),
-      hasActiveTurn: vi.fn(() => false),
-      observeAcpLifecycleMarker: vi.fn((input: { body: unknown }) => ({ body: input.body, pendingWrite: null })),
-    },
+    sessionTurnLifecycle: createSessionTurnLifecycle({
+      sessionId: 'happier-session-1',
+      enqueueSessionTurn: vi.fn(async () => {}),
+    }),
     updateMetadata: vi.fn((updater: (current: Metadata) => Metadata) => {
       metadata = updater(metadata);
       hasMetadata = true;
@@ -882,7 +873,10 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     } else {
       process.env.HAPPIER_CLAUDE_REMOTE_INTERRUPT_THEN_TEARDOWN_GRACE_MS = previousGraceMs;
     }
-    for (const session of createdSessions.splice(0)) session.cleanup();
+    for (const session of createdSessions.splice(0)) {
+      session.client.sessionTurnLifecycle?.dispose();
+      session.cleanup();
+    }
   });
 
   it('releases the previous Agent SDK input wait before a provider relaunch', async () => {
