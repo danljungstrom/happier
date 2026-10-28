@@ -128,6 +128,8 @@ import {
     observeClaudeProviderTaskRuntimeActivityHook,
     observeClaudeProviderTaskRuntimeActivityRow,
 } from './remote/runtimeActivityEvidence';
+import { isLivePrimaryClaudeProviderHook } from './utils/sessionHookAttribution';
+import type { SessionHookData } from './utils/startHookServer';
 import {
     hashClaudeEnhancedModeForQueue,
     hashClaudeUnifiedTerminalLaunchOptionsForQueue,
@@ -745,8 +747,11 @@ export async function claudeRemoteLauncher(
     const providerRuntimeActivityEvidence = createClaudeRuntimeActivityEvidence({
         providerActivityLedger: session.getProviderTaskActivityLedger() ?? undefined,
     });
-    const observeLegacyProviderActivityHook = (hook: unknown): void => {
+    const observeLegacyProviderActivityHook = (hook: SessionHookData): void => {
         if (activeRemoteRunnerKind !== 'legacy') return;
+        if (isLivePrimaryClaudeProviderHook(hook)) {
+            session.client.sessionTurnLifecycle?.observeProviderTurnEvent();
+        }
         workflowActivitySource?.observeTranscriptMessage(hook, { historicalReplay: false, authenticatedHook: true });
         observeClaudeProviderTaskRuntimeActivityHook({
             hook,
@@ -1782,6 +1787,7 @@ export async function claudeRemoteLauncher(
                     onThinkingChange: session.onThinkingChange,
                     claudeArgs: session.claudeArgs,
                     onMessage,
+                    onProviderEvent: () => session.client.sessionTurnLifecycle?.observeProviderTurnEvent(),
                     onEffectiveModel: (facts: ClaudeEffectiveModelObservation) => applyClaudeEffectiveModelUpdate({
                         client: session.client, reconcileModels: session.reconcileSessionModels,
                         ...facts, source: 'sdk', logPrefix: '[remote]',

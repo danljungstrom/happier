@@ -1,5 +1,6 @@
 import type { SessionHookData } from './startHookServer';
 import { normalizeClaudeAgentSdkProviderTaskId } from '../providerActivity/createClaudeProviderActivityLedger';
+import { isReplaySdkMessage } from '../remote/runtimeActivityEvidence';
 
 /**
  * Claude Code emits hook events for sidechain (subagent) activity with an
@@ -35,6 +36,13 @@ export function isSidechainSessionHook(data: SessionHookData): boolean {
 export function readSessionHookEventName(data: SessionHookData): string {
   const raw = data.hook_event_name ?? data.hookEventName;
   return typeof raw === 'string' ? raw : '';
+}
+
+/** Provider ingress only: the permission bridge emits completion after a user decision. */
+export function isLivePrimaryClaudeProviderHook(data: SessionHookData): boolean {
+  return !isReplaySdkMessage(data)
+    && !isSidechainSessionHook(data)
+    && readSessionHookEventName(data) !== 'PermissionRequestCompleted';
 }
 
 export function readSidechainSessionHookProviderTaskId(data: SessionHookData): string | null {

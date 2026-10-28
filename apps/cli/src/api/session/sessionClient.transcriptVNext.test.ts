@@ -334,27 +334,6 @@ describe('ApiSessionClient transcript vNext transport', () => {
     );
   });
 
-  it('notifies the turn stall watch when a consumed Claude JSONL echo arrives', async () => {
-    vi.resetModules();
-    sessionSocketStub = createApiSessionSocketStub({ connected: true, emitWithAckResult: { ok: true, id: 'm1', seq: 1, localId: 'l1', didWrite: true } });
-    userSocketStub = createApiSessionSocketStub({ connected: true, emitWithAckResult: { ok: true } });
-
-    const { ApiSessionClient } = await import('./sessionClient');
-
-    const client = new ApiSessionClient('tok', createPlainSessionFixture({ id: 's1' }));
-    const observeProviderTurnEvent = vi.spyOn(client.sessionTurnLifecycle, 'observeProviderTurnEvent');
-
-    // Unified-terminal echo suppression path: the provider really emitted this
-    // echo, so it must count as provider liveness and reset the stall stopwatch.
-    client.recordClaudeJsonlMessageConsumed({
-      type: 'user',
-      uuid: 'user-echo-1',
-      message: { content: 'already persisted prompt' },
-    } as RawJSONLines);
-
-    expect(observeProviderTurnEvent).toHaveBeenCalledTimes(1);
-  });
-
   it('stamps Claude structured rows as event', async () => {
     vi.resetModules();
     sessionSocketStub = createApiSessionSocketStub({ connected: true, emitWithAckResult: { ok: true, id: 'm1', seq: 1, localId: 'l1', didWrite: true } });

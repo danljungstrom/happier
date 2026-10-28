@@ -13,6 +13,8 @@ import {
   type SessionNotification,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type ReadTextFileRequest,
+  type WriteTextFileRequest,
   type InitializeRequest,
   type InitializeResponse,
   type NewSessionRequest,
@@ -573,7 +575,7 @@ export function buildInitializeRequest(params: {
 export function createAcpClientFsMethods(params: {
   cwd: string;
   permissionHandler?: AcpPermissionHandler;
-}): Pick<AcpClientConnectionHandlers, 'readTextFile' | 'writeTextFile'> {
+}): Required<Pick<AcpClientConnectionHandlers, 'readTextFile' | 'writeTextFile'>> {
   const rootResolved = resolve(params.cwd);
   const rootRealPromise = fs.realpath(rootResolved).catch(() => rootResolved);
 
@@ -865,6 +867,7 @@ function readAcpListedSessionUpdatedAtMs(value: unknown): number | null {
  */
 export class AcpBackend implements AgentBackend {
   private listeners: AgentMessageHandler[] = [];
+  private readonly providerTurnEventListeners = new Set<() => void>();
   private process: ChildProcess | null = null;
   private processLaunchCleanup: (() => void | Promise<void>) | null = null;
   private stderrAppender: BoundedTextFileAppender | null = null;
@@ -1004,6 +1007,26 @@ export class AcpBackend implements AgentBackend {
     this.listeners.push(handler);
   } 
 
+  onProviderTurnEvent(handler: () => void): () => void {
+    this.providerTurnEventListeners.add(handler);
+    return () => { this.providerTurnEventListeners.delete(handler); };
+  }
+
+  private observeProviderTurnEvent(sessionId: unknown): void {
+    if (
+      this.disposed || this.replayCapture || this.acpSessionId === null || sessionId !== this.acpSessionId
+      || this.dispatchedPromptTurnGeneration !== this.turnGeneration
+      || this.isCurrentTurnGenerationClosed()
+    ) return;
+    for (const listener of this.providerTurnEventListeners) {
+      try {
+        listener();
+      } catch (error) {
+        logger.warnFile('[AcpBackend] Provider activity handler failed', error);
+      }
+    }
+  }
+
   offMessage(handler: AgentMessageHandler): void {
     const index = this.listeners.indexOf(handler);
     if (index !== -1) {
@@ -1139,7 +1162,11 @@ export class AcpBackend implements AgentBackend {
   private createExtensionHandlerContext(
     method: string,
     sdkSignal: AbortSignal,
+    sessionId?: string | null,
   ): AcpExtensionHandlerContext {
+    // Sessionless native extensions use this dedicated backend connection's
+    // single bound session. Explicit foreign/malformed identities never fall back.
+    this.observeProviderTurnEvent(sessionId === undefined ? this.acpSessionId : sessionId);
     return {
       method,
       sessionId: this.acpSessionId,
@@ -1464,6 +1491,7 @@ export class AcpBackend implements AgentBackend {
           return { outcome: { outcome: 'cancelled' } };
         };
         if (!isCurrentPermissionRequest()) return withdrawPermissionRequest();
+        if (tracksForeground) this.observeProviderTurnEvent(requestSessionId);
         const toolCall = extendedParams.toolCall;
         const options = extendedParams.options || [];
         // ACP spec: toolCall.toolCallId is the correlation ID. Fall back to legacy fields when needed.
@@ -1672,13 +1700,20 @@ export class AcpBackend implements AgentBackend {
     };
 
     if (isAcpFsEnabled()) {
-      Object.assign(
-        clientHandlers,
-        createAcpClientFsMethods({
-          cwd: this.options.cwd,
-          permissionHandler: this.options.permissionHandler,
-        })
-      );
+      const clientFs = createAcpClientFsMethods({
+        cwd: this.options.cwd,
+        permissionHandler: this.options.permissionHandler,
+      });
+      Object.assign(clientHandlers, {
+        readTextFile: (request: ReadTextFileRequest) => {
+          this.observeProviderTurnEvent(request.sessionId);
+          return clientFs.readTextFile(request);
+        },
+        writeTextFile: (request: WriteTextFileRequest) => {
+          this.observeProviderTurnEvent(request.sessionId);
+          return clientFs.writeTextFile(request);
+        },
+      } satisfies Pick<AcpClientConnectionHandlers, 'readTextFile' | 'writeTextFile'>);
     }
     this.connection = createAcpClientConnection({
       name: 'happier-cli',
@@ -1686,8 +1721,8 @@ export class AcpBackend implements AgentBackend {
       isAuthenticationSetupFailure: this.options.isAuthenticationSetupFailure,
       handlers: clientHandlers,
       extensions: this.options.extensionHandlers,
-      createExtensionContext: (method, sdkSignal) => (
-        this.createExtensionHandlerContext(method, sdkSignal)
+      createExtensionContext: (method, sdkSignal, sessionId) => (
+        this.createExtensionHandlerContext(method, sdkSignal, sessionId)
       ),
     });
 
@@ -2241,6 +2276,12 @@ export class AcpBackend implements AgentBackend {
     if (updateCandidates.length === 0) {
       logger.debug('[AcpBackend] Received session update without update field:', params);
       return;
+    }
+
+    if (
+      updateCandidates.some((candidate) => typeof asRecord(candidate)?.sessionUpdate === 'string')
+    ) {
+      this.observeProviderTurnEvent(raw.sessionId);
     }
 
     if (this.replayCapture) {
@@ -4101,6 +4142,7 @@ export class AcpBackend implements AgentBackend {
     }
     // Clear state
     this.listeners = [];
+    this.providerTurnEventListeners.clear();
     this.connection = null;
     this.acpSessionId = null;
     this.negotiatedSessionCapabilities = NO_NEGOTIATED_ACP_SESSION_CAPABILITIES;

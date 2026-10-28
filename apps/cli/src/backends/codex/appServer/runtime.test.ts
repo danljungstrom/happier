@@ -49,6 +49,7 @@ import {
     createCodexAppServerRuntime as createCodexAppServerRuntimeProduction,
 } from './runtime';
 import { createCodexAppServerProcessEnv, createCodexAppServerTestEnvScope } from './testkit/fakeCodexAppServer';
+import { createCodexAppServerClient } from './client/createCodexAppServerClient';
 
 type CommittedSnapshotBody = Readonly<{
     type?: string;
@@ -79,8 +80,9 @@ function createRuntimeMetadata(path: string): Metadata {
     };
 }
 
-function createSessionTurnLifecycleTestDouble(overrides: Partial<SessionTurnLifecycle> = {}): SessionTurnLifecycle {
+function createSessionTurnLifecycleTestDouble(overrides: Partial<SessionTurnLifecycle> = {}): SessionTurnLifecycle & { observeProviderTurnEvent(): void } {
     return {
+        observeProviderTurnEvent: vi.fn(),
         beginTurn: vi.fn(async () => ({ turnId: 'session-turn-1' })),
         attachProviderTurnId: vi.fn(async () => {}),
         appendTranscriptAnchors: vi.fn(async () => {}),
@@ -663,7 +665,7 @@ async function writeFakeCodexAppServerScript(params: Readonly<{
         '            continue;',
         '        }',
         '        setTimeout(() => {',
-        '            const result = text === "no-id-response-unknown-before-owned-start" || text === "no-id-response-owned-terminal-before-owned-start" || text === "child-terminal-before-primary-identity-no-activity" || text === "child-terminal-after-primary-idless-activity"',
+        '            const result = text === "no-id-response-unknown-before-owned-start" || text === "no-id-response-owned-terminal-before-owned-start" || text === "child-terminal-before-primary-identity-no-activity" || text === "child-terminal-after-primary-idless-activity" || text === "bridge-generated-image-no-turn-id"',
         '                ? { threadId: msg.params?.threadId ?? null }',
         '                : { turn: { id: turnId }, threadId: msg.params?.threadId ?? null };',
         '            process.stdout.write(JSON.stringify({ id: msg.id, result }) + "\\n");',
@@ -898,7 +900,7 @@ async function writeFakeCodexAppServerScript(params: Readonly<{
         '            }, 18);',
         '            continue;',
         '        }',
-        '        if (text === "bridge-generated-image") {',
+        '        if (text === "bridge-generated-image" || text === "bridge-generated-image-no-turn-id") {',
         '            setTimeout(() => {',
         '                process.stdout.write(JSON.stringify({ method: "item/agentMessage/delta", params: { itemId: "msg_img", delta: "Generated image:" } }) + "\\n");',
         '            }, 6);',
@@ -1537,6 +1539,13 @@ async function writeFakeCodexAppServerScript(params: Readonly<{
         '            setTimeout(() => {',
         '                process.stdout.write(JSON.stringify({ method: "turn/completed", params: { threadId: msg.params?.threadId ?? null, turn: { id: successorTurnId } } }) + "\\n");',
         '            }, respondDelayMs + completionDelayMs + successorCompletionDelayMs);',
+        '            continue;',
+        '        }',
+        '        if (text.startsWith("watch-stale-top-level-")) {',
+        '            const method = text.slice("watch-stale-top-level-".length);',
+        '            setTimeout(() => {',
+        '                process.stdout.write(JSON.stringify({ method, params: { threadId: msg.params?.threadId ?? null, id: turnId + "-old", status: method === "turn/started" ? "inProgress" : "completed" } }) + "\\n");',
+        '            }, respondDelayMs + 7);',
         '            continue;',
         '        }',
         '        if (text === "ignore-unknown-mismatched-turn-completion") {',
@@ -8567,6 +8576,151 @@ describe('createCodexAppServerRuntime', () => {
             ]));
         });
     }
+
+    it.each(['turn/started', 'turn/completed'])(
+        'does not refresh active-turn silence for an old top-level native %s id', async (staleMethod) => {
+        const { root } = await createRuntimeFixture('happier-codex-native-stale-turn-id-');
+        vi.useFakeTimers();
+        const notices: unknown[] = [];
+        const lifecycle = createSessionTurnLifecycle({
+            sessionId: 'codex-stale-turn', turnStallWarnMs: 1000,
+            onTurnStallNotice: (notice) => notices.push(notice),
+            enqueueSessionTurn: async () => {},
+        });
+        let releaseStale: () => void = () => {};
+        const staleGate = new Promise<void>((resolve) => { releaseStale = resolve; });
+        let nativeStarted: () => void = () => {};
+        const nativeStartDelivered = new Promise<void>((resolve) => { nativeStarted = resolve; });
+        let staleReceived: () => void = () => {};
+        const staleDelivered = new Promise<void>((resolve) => { staleReceived = resolve; });
+        const session = createMutableApiSessionClientFixture({
+            metadata: createRuntimeMetadata(root), overrides: { sessionTurnLifecycle: lifecycle },
+        });
+        const runtime = createCodexAppServerRuntime({
+            directory: root, session, onThinkingChange: vi.fn(),
+            createClient: async () => {
+                const client = await createCodexAppServerClient({ cwd: root });
+                return {
+                    ...client,
+                    registerNotificationHandler: (method, handler) => client.registerNotificationHandler(method, async (payload) => {
+                        const stale = method === staleMethod && typeof payload === 'object' && payload !== null && 'id' in payload;
+                        if (stale) await staleGate;
+                        const work = handler(payload);
+                        if (stale) staleReceived();
+                        else if (method === 'turn/started') nativeStarted();
+                        await work;
+                    }),
+                };
+            },
+        });
+        let prompt: Promise<void> | undefined;
+        try {
+            await runtime.startOrLoad({});
+            prompt = runtime.sendPrompt(`watch-stale-top-level-${staleMethod}`);
+            await nativeStartDelivered;
+            await vi.advanceTimersByTimeAsync(600);
+            releaseStale();
+            await staleDelivered;
+            await vi.advanceTimersByTimeAsync(400);
+            expect(notices).toHaveLength(1);
+            expect(notices[0]).toMatchObject({
+                lastEventAgeMs: 1000, providerTurnId: `turn-watch-stale-top-level-${staleMethod}`,
+            });
+            expect(runtime.isTurnInFlight()).toBe(true);
+        } finally {
+            releaseStale();
+            await lifecycle.endSession();
+            vi.useRealTimers();
+            await runtime.reset();
+            await prompt?.catch(() => {});
+        }
+    });
+
+    it.each(['bridge-generated-image', 'bridge-generated-image-no-turn-id'])(
+        'observes native receipt while media persistence blocks bridge work (%s)', async (promptText) => {
+        const { root } = await createRuntimeFixture('happier-codex-native-blocked-transcript-', {
+            omitTurnStartedForPrompt: promptText.endsWith('-no-turn-id') ? promptText : undefined,
+        });
+        vi.useFakeTimers();
+        const notices: unknown[] = [];
+        const lifecycle = createSessionTurnLifecycle({
+            sessionId: 'codex-blocked-media', turnStallWarnMs: 1000,
+            onTurnStallNotice: (notice) => notices.push(notice),
+            enqueueSessionTurn: async () => {},
+        });
+        let persistenceEntered: () => void = () => {};
+        let releasePersistence: () => void = () => {};
+        const persistenceStarted = new Promise<void>((resolve) => { persistenceEntered = resolve; });
+        const blockedPersistence = new Promise<void>((resolve) => { releasePersistence = resolve; });
+        let releaseTerminal: () => void = () => {};
+        const terminalGate = new Promise<void>((resolve) => { releaseTerminal = resolve; });
+        let terminalReceived: () => void = () => {};
+        const terminalDelivered = new Promise<void>((resolve) => { terminalReceived = resolve; });
+        const session = createMutableApiSessionClientFixture({
+            metadata: createRuntimeMetadata(root),
+            overrides: {
+                sessionTurnLifecycle: lifecycle,
+            },
+        });
+        const runtime = createCodexAppServerRuntime({
+            directory: root, session, onThinkingChange: vi.fn(),
+            sessionMedia: { persist: async () => {
+                persistenceEntered();
+                await blockedPersistence;
+                return { media: [], unavailable: [] };
+            } },
+            createClient: async () => {
+                const client = await createCodexAppServerClient({ cwd: root });
+                return {
+                    ...client,
+                    registerNotificationHandler: (method, handler) => client.registerNotificationHandler(method, async (payload) => {
+                        // Hold only the external delivery boundary; keep the real native parser and runtime.
+                        if (method === 'turn/completed') await terminalGate;
+                        const work = handler(payload);
+                        if (method === 'turn/completed') terminalReceived();
+                        await work;
+                    }),
+                };
+            },
+        });
+        let prompt: Promise<void> | undefined;
+        try {
+            await runtime.startOrLoad({});
+            prompt = runtime.sendPrompt(promptText);
+            await persistenceStarted;
+            await vi.advanceTimersByTimeAsync(600);
+            releaseTerminal();
+            await terminalDelivered;
+            await vi.advanceTimersByTimeAsync(600);
+            expect(notices).toEqual([]);
+        } finally {
+            releaseTerminal();
+            releasePersistence();
+            await lifecycle.endSession();
+            vi.useRealTimers();
+            await runtime.reset();
+            await prompt?.catch(() => {});
+        }
+    });
+
+    it('observes correlated native backflow even when it has no transcript update', async () => {
+        const { root } = await createRuntimeFixture('happier-codex-app-server-stall-backflow-');
+        const lifecycle = createSessionTurnLifecycle({
+            sessionId: 'codex-native-backflow',
+            enqueueSessionTurn: async () => {},
+        });
+        const observed = vi.spyOn(lifecycle, 'observeProviderTurnEvent');
+        const session = createMutableApiSessionClientFixture({
+            metadata: createRuntimeMetadata(root),
+            overrides: { sessionTurnLifecycle: lifecycle },
+        });
+        const runtime = createCodexAppServerRuntime({ directory: root, session, onThinkingChange: vi.fn() });
+        await runtime.startOrLoad({});
+        await runtime.sendPrompt('bridge-token-usage');
+        // Exactly the native start, token-usage update, and terminal frame.
+        expect(observed).toHaveBeenCalledTimes(3);
+        await lifecycle.endSession();
+    });
 
     it('forwards thread token usage updates and patches the active model context window from runtime telemetry', async () => {
         const { root } = await createRuntimeFixture('happier-codex-app-server-runtime-token-usage-');

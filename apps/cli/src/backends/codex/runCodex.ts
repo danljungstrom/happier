@@ -1766,6 +1766,7 @@ export async function runCodex(opts: {
             mode: codexMcpServer.mode,
             command: codexMcpServer.command,
             env: codexProviderProcessEnv,
+            onProviderTurnEvent: () => session.sessionTurnLifecycle?.observeProviderTurnEvent(),
         });
     }
 

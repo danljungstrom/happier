@@ -36,6 +36,7 @@ import { normalizeCurrentHappierSessionId } from '@/agent/runtime/session/curren
 import { hasClaudeQueuedUserTurns } from './remote/resultTurnBoundary';
 import type { ClaudeEffectiveModelObservation } from './sessionModels/effectiveModelUpdate';
 import { readClaudeMainChainAssistantModelId } from './sessionModels/readClaudeMainChainAssistantModelId';
+import { isSidechainSessionHook } from './utils/sessionHookAttribution';
 
 function buildClaudeEffortArgs(params: Readonly<{
     modelId: unknown;
@@ -133,7 +134,7 @@ export async function claudeRemote(opts: {
         toolName: string,
         input: unknown,
         mode: EnhancedMode,
-        options: { signal: AbortSignal; toolUseId?: string | null },
+        options: { signal: AbortSignal; toolUseId?: string | null; agentId?: string | null },
     ) => Promise<PermissionResult>,
     /** Path to temporary settings file with SessionStart hook (required for session tracking) */
     hookSettingsPath: string,
@@ -151,6 +152,8 @@ export async function claudeRemote(opts: {
     onSessionFound: (id: string) => void,
     onThinkingChange?: (thinking: boolean) => void,
     onMessage: (message: SDKMessage) => void,
+    /** Live provider ingress, before transcript filtering or buffering. */
+    onProviderEvent?: () => void,
     onEffectiveModel?: (facts: ClaudeEffectiveModelObservation) => void,
     onCompletionEvent?: (event: ClaudeCompletionEvent) => void,
     onSessionReset?: () => void,
@@ -298,8 +301,10 @@ export async function claudeRemote(opts: {
         // The authenticated hook plugin is the canonical permission bridge. Register the legacy
         // stdio prompt tool only as a fallback when hook installation was explicitly unavailable.
         ...(opts.hookPluginDir ? {} : {
-            canCallTool: (toolName: string, input: unknown, options: { signal: AbortSignal; toolUseId?: string | null }) =>
-                opts.canCallTool(toolName, input, mode, options),
+            canCallTool: (toolName: string, input: unknown, options: { signal: AbortSignal; toolUseId?: string | null; agentId?: string | null }) => {
+                if (!isSidechainSessionHook({ agentId: options.agentId })) opts.onProviderEvent?.();
+                return opts.canCallTool(toolName, input, mode, options);
+            },
         }),
         executable: runtimeExecutable,
         abort: opts.signal,
@@ -328,6 +333,7 @@ export async function claudeRemote(opts: {
         prompt: messages,
         options: sdkOptions,
         onMessageReceived: (message) => {
+            if (!isReplaySdkMessage(message)) opts.onProviderEvent?.();
             if (promptSettlements.observeProviderMessage(message)) return;
             if (isClaudeHookLifecycleStreamMessage(message)) return;
             logger.debugLargeJson(`[claudeRemote] Message ${message.type}`, message);

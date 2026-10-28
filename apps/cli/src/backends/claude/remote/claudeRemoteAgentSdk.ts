@@ -118,6 +118,7 @@ import {
 } from '../connectedServices/claudeSubscriptionAccessTokenRefresh';
 import { resolveWindowsCommandInvocation } from '@happier-dev/cli-common/process';
 import type { ClaudeEffectiveModelObservation } from '../sessionModels/effectiveModelUpdate';
+import { isLivePrimaryClaudeProviderHook, isSidechainSessionHook } from '../utils/sessionHookAttribution';
 
 type AgentSdkQueryFactory = (params: {
     prompt: string | AsyncIterable<SDKUserMessage>;
@@ -181,6 +182,8 @@ export async function claudeRemoteAgentSdk(opts: {
     onThinkingChange?: (thinking: boolean) => void;
     onProviderPromptStarted?: () => void | Promise<void>;
     onMessage: (message: SDKMessage) => void;
+    /** Live provider ingress, before transcript filtering or buffering. */
+    onProviderEvent?: () => void;
     /** Explicit query launch controls acknowledged by the provider's successful init. */
     onEffectiveModel?: (facts: ClaudeEffectiveModelObservation) => void;
     /** Correlation supplied by the workflow owner after onMessage has observed the same SDK fact. */
@@ -576,6 +579,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
             decisionReason?: string | null;
         },
     ): Promise<PermissionResult> => {
+        if (!isSidechainSessionHook({ agentId: options.agentId })) opts.onProviderEvent?.();
         const result = await opts.canCallTool(toolName, input, resolvedMode, options);
 
         const normalizedToolName = typeof toolName === 'string' ? toolName.trim() : '';
@@ -612,6 +616,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
 	        getMode: () => mode,
 	        onSessionFound: (sessionId, data) => recordSessionFound(sessionId, data as any),
 	        onSessionHook: (data) => {
+	            if (isLivePrimaryClaudeProviderHook(data)) opts.onProviderEvent?.();
 	            opts.onSessionHook?.(data);
 	            const activity = readClaudeSessionHookProviderTaskActivity(data);
 	            if (!activity) return;
@@ -1777,6 +1782,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
 
         let unpublishedLaunchEffort = resolvedUltracode ? 'xhigh' : queryOptions.effort;
         for await (const message of response as any) {
+            if (!isReplaySdkMessage(message)) opts.onProviderEvent?.();
             const observedModelId = isReplaySdkMessage(message) ? null : readClaudeMainChainAssistantModelId(message);
             if (observedModelId) {
                 const launchEffort = unpublishedLaunchEffort;

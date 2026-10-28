@@ -144,6 +144,7 @@ export function createSessionTurnLifecycle(
     let lastTerminalTurn: MutableTurn | null = null;
     let lastActiveTurnTouchAt: number | null = null;
     const terminalWrites = new Set<string>();
+    let observationDisposed = false;
     const stallWatch = createTurnStallWatchdog({
         ...(params.turnStallWarnMs !== undefined ? { stallWarnMs: params.turnStallWarnMs } : {}),
         now,
@@ -325,7 +326,7 @@ export function createSessionTurnLifecycle(
         if (!activeTurn || activeTurn.terminalStatus) {
             activeTurn = createTurn(input);
             lastActiveTurnTouchAt = input.observedAt ?? now();
-            stallWatch.armTurnStallWatch();
+            if (!observationDisposed) stallWatch.armTurnStallWatch();
         } else {
             mergeProviderFacts(activeTurn, input);
         }
@@ -597,6 +598,10 @@ export function createSessionTurnLifecycle(
     }
 
     return {
+        dispose() {
+            observationDisposed = true;
+            stallWatch.disarmTurnStallWatch();
+        },
         beginTurn,
         attachProviderTurnId,
         appendTranscriptAnchors,

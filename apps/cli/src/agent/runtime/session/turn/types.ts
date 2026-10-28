@@ -113,6 +113,8 @@ export type ObserveAcpLifecycleMarkerResult = Readonly<{
 }>;
 
 export type SessionTurnLifecycleController = SessionTurnLifecycle & Readonly<{
+    /** Release local observation resources without settling the active turn. */
+    dispose(): void;
     observeAcpLifecycleMarker(input: Readonly<{
         provider: ACPProvider;
         body: ACPMessageData;

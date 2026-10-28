@@ -4249,7 +4249,6 @@ export class ApiSessionClient extends EventEmitter {
      * @param body - Message body (can be MessageContent or raw content for agent messages)
      */
     sendClaudeSessionMessage(body: RawJSONLines, meta?: Record<string, unknown>) {
-        this.notifyTurnStallWatchProviderEvent();
         if (isToolTraceEnabled()) {
             recordClaudeToolTraceEvents({ sessionId: this.sessionId, body });
         }
@@ -4279,7 +4278,6 @@ export class ApiSessionClient extends EventEmitter {
         body: RawJSONLines,
         meta?: Record<string, unknown>,
     ): Promise<void> {
-        this.notifyTurnStallWatchProviderEvent();
         if (isToolTraceEnabled()) {
             recordClaudeToolTraceEvents({ sessionId: this.sessionId, body });
         }
@@ -4314,7 +4312,6 @@ export class ApiSessionClient extends EventEmitter {
         const { content, localId, sidechainId } = await this.prepareClaudeSessionMessage(body, opts.meta);
         requireExactCommitLocalId(localId);
 
-        this.notifyTurnStallWatchProviderEvent();
         this.logSendWhileDisconnected('Claude session message', { type: body.type });
         return await this.sessionMutationOutbox.enqueueTranscriptMessage(createTranscriptMessageAppendMutation({
             sessionId: this.sessionId,
@@ -4331,9 +4328,6 @@ export class ApiSessionClient extends EventEmitter {
     recordClaudeJsonlMessageConsumed(body: RawJSONLines, meta?: Record<string, unknown>): void {
         const key = buildClaudeJsonlMessageKey(body);
         if (!key) return;
-        // Unified-terminal echo suppression: the provider really emitted (and is
-        // consuming) this echo, so it counts as provider liveness for the stall watch.
-        this.notifyTurnStallWatchProviderEvent();
         const sidechainId = readNonBlankOpaqueIdentifier((body as Record<string, unknown>).sidechainId);
         const content = {
             role: 'agent',
@@ -4386,7 +4380,6 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     sendCodexMessage(body: any) {
-        this.notifyTurnStallWatchProviderEvent();
         const { normalizedBody, content } = this.prepareCodexMessage(body);
 
         recordCodexToolTraceEventIfNeeded({ sessionId: this.sessionId, body: normalizedBody });
@@ -4433,7 +4426,6 @@ export class ApiSessionClient extends EventEmitter {
         const localId = requireExactCommitLocalId(opts?.localId);
         const { normalizedBody, content } = this.prepareCodexMessage(body);
 
-        this.notifyTurnStallWatchProviderEvent();
         recordCodexToolTraceEventIfNeeded({ sessionId: this.sessionId, body: normalizedBody });
         this.logSendWhileDisconnected('Codex message', { type: normalizedBody?.type });
 
@@ -4501,17 +4493,6 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     /**
-     * Provider message backflow is the turn stall watch's ONLY reset signal — every
-     * send* path below carries provider events (ACP-normalized, Claude JSONL, Codex,
-     * ephemeral stream deltas) and must notify. Never wire the keepalive/touch path:
-     * presence heartbeats stay fresh through provider stalls (upstream #534) and
-     * would blind the watch exactly when it matters.
-     */
-    private notifyTurnStallWatchProviderEvent(): void {
-        this.sessionTurnLifecycle.observeProviderTurnEvent();
-    }
-
-    /**
      * Send a generic agent message to the session using ACP (Agent Communication Protocol) format.
      * Works for any agent type (Gemini, Codex, Claude, etc.) - CLI normalizes to unified ACP format.
      *
@@ -4528,7 +4509,6 @@ export class ApiSessionClient extends EventEmitter {
             provider,
             body,
         });
-        this.notifyTurnStallWatchProviderEvent();
         if (lifecycleMarker.pendingWrite) {
             this.trackSessionTurnWrite(
                 lifecycleMarker.pendingWrite,
@@ -4594,7 +4574,6 @@ export class ApiSessionClient extends EventEmitter {
         body: ACPMessageData,
         opts: { localId: string; createdAt: number; updatedAt?: number; meta?: Record<string, unknown>; tick?: number },
     ): EphemeralSendOutcome {
-        this.notifyTurnStallWatchProviderEvent();
         if (!this.socket.connected) {
             return createDisconnectedEphemeralSendOutcome(this.sessionConnectionEpoch);
         }
@@ -4673,7 +4652,6 @@ export class ApiSessionClient extends EventEmitter {
         body: ACPMessageData,
         opts: { localId: string; tick: number; baseLength: number; createdAt: number; updatedAt?: number; meta?: Record<string, unknown> },
     ): EphemeralSendOutcome {
-        this.notifyTurnStallWatchProviderEvent();
         if (!this.socket.connected) {
             return createDisconnectedEphemeralSendOutcome(this.sessionConnectionEpoch);
         }
@@ -4905,7 +4883,6 @@ export class ApiSessionClient extends EventEmitter {
         body: ACPMessageData,
         opts: { localId: string; meta?: Record<string, unknown>; provenance: SessionTranscriptObservationProvenanceV1 },
     ): Promise<Readonly<{ persisted: boolean; delivered: boolean }>> {
-        this.notifyTurnStallWatchProviderEvent();
         const { normalizedBody, content, localId, sidechainId } = this.prepareAcpAgentMessage({
             provider,
             body,
@@ -4957,7 +4934,6 @@ export class ApiSessionClient extends EventEmitter {
         body: ACPMessageData,
         opts: { localId: string; meta?: Record<string, unknown>; provenance?: SessionTranscriptObservationProvenanceV1 },
     ): Promise<void> {
-        this.notifyTurnStallWatchProviderEvent();
         // Explicit observation provenance opts into durable journal custody. Callers without
         // provenance retain the required remote-acknowledgement contract below.
         if (opts.provenance !== undefined) {
@@ -5005,7 +4981,6 @@ export class ApiSessionClient extends EventEmitter {
         body: ACPMessageData,
         opts: { localId: string; meta?: Record<string, unknown> },
     ): Promise<SessionMessageCommitResult> {
-        this.notifyTurnStallWatchProviderEvent();
         const requestedLocalId = requireExactCommitLocalId(opts?.localId);
         const { normalizedBody, content, localId, sidechainId } = this.prepareAcpAgentMessage({
             provider,
@@ -6085,6 +6060,7 @@ export class ApiSessionClient extends EventEmitter {
 
     async close() {
         logger.debug('[API] socket.close() called');
+        this.sessionTurnLifecycle.dispose();
         this.startExecutionRunDisposal();
         this.executionRunPermissionHandler?.reset();
         this.executionRunPermissionHandler = null;

@@ -55,10 +55,13 @@ vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => {
     return { StdioClientTransport, __transportInstances: instances };
 });
 
+const nativeNotificationHandlers = vi.hoisted(() => [] as Array<(data: { params: { msg: unknown } }) => void>);
+const nativeRequestHandlers = vi.hoisted(() => [] as Array<(request: { params: unknown }) => Promise<unknown>>);
+
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => {
     class Client {
-        setNotificationHandler() {}
-        setRequestHandler() {}
+        setNotificationHandler(_schema: unknown, handler: (data: { params: { msg: unknown } }) => void) { nativeNotificationHandlers.push(handler); }
+        setRequestHandler(_schema: unknown, handler: (request: { params: unknown }) => Promise<unknown>) { nativeRequestHandlers.push(handler); }
         async connect() {}
         async close() {}
     }
@@ -91,6 +94,44 @@ afterEach(async () => {
     envScope = createEnvKeyScope(envKeys);
     for (const dir of TEMP_DIRS) await removeTempDir(dir);
     TEMP_DIRS.clear();
+});
+
+describe('CodexMcpClient provider backflow', () => {
+    it('observes native elicitation ingress even when permission policy denies without output', async () => {
+        const { CodexMcpClient } = await import('./codexMcpClient');
+        const observed: string[] = [];
+        const client = new CodexMcpClient({ mode: 'mcp-server', onProviderTurnEvent: () => observed.push('request') });
+        client.setThreadIdForResume('selected-thread');
+        try {
+            await client.connect();
+            const receive = nativeRequestHandlers.at(-1)!;
+            const response = await receive({ params: {
+                codex_elicitation: 'exec-approval', codex_call_id: 'call-1', codex_command: ['pwd'],
+            } });
+            expect(response).toMatchObject({ action: 'decline', decision: 'denied' });
+            expect(observed).toEqual(['request']);
+        } finally {
+            await client.disconnect();
+        }
+    });
+
+    it('observes no-output native events only for the selected session', async () => {
+        const { CodexMcpClient } = await import('./codexMcpClient');
+        const observed: unknown[] = [];
+        const client = new CodexMcpClient({ onProviderTurnEvent: () => observed.push('provider-event') });
+        client.setThreadIdForResume('selected-thread');
+        const receive = nativeNotificationHandlers.at(-1)!;
+        receive({ params: { msg: { type: 'token_count', thread_id: 'foreign-thread' } } });
+        expect(observed).toEqual([]);
+        expect(client.getSessionId()).toBe('selected-thread');
+        receive({ params: { msg: { type: 'error', thread_id: 'selected-thread' } } });
+        expect(observed).toEqual(['provider-event']);
+        // The dedicated MCP transport can omit the session on individual turn events.
+        receive({ params: { msg: { type: 'token_count' } } });
+        expect(observed).toEqual(['provider-event', 'provider-event']);
+        receive({ params: { msg: null } });
+        expect(observed).toEqual(['provider-event', 'provider-event']);
+    });
 });
 
 describe('CodexMcpClient elicitation ids', () => {

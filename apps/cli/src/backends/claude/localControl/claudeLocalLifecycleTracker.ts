@@ -6,6 +6,7 @@ import type { RawJSONLines } from '@/backends/claude/types';
 import type { SessionHookData } from '../utils/startHookServer';
 import {
   isSidechainSessionHook,
+  isLivePrimaryClaudeProviderHook,
   readSessionHookEventName,
 } from '../utils/sessionHookAttribution';
 export { isClaudeTaskNotificationUserPromptHook } from '../utils/sessionHookTaskNotification';
@@ -21,6 +22,7 @@ import {
   isClaudeTranscriptTaskNotification,
 } from './readClaudeTranscriptProviderActivity';
 import type { createClaudeProviderRuntimeActivityAdapter } from '../providerActivity/createClaudeProviderRuntimeActivityAdapter';
+import { isReplaySdkMessage } from '../remote/runtimeActivityEvidence';
 
 function readNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -74,6 +76,7 @@ export function createClaudeLocalLifecycleTracker(opts: Readonly<{
   lifecycle: LocalTurnLifecycleController;
   runtimeActivityAdapter?: ReturnType<typeof createClaudeProviderRuntimeActivityAdapter> | null;
   providerActivityLedger?: ReturnType<typeof createClaudeProviderActivityLedger>;
+  onProviderEvent?: () => void;
 }>) {
   const providerActivityLedger = opts.providerActivityLedger ?? createClaudeProviderActivityLedger();
   let pendingTaskNotificationReaction: {
@@ -118,8 +121,10 @@ export function createClaudeLocalLifecycleTracker(opts: Readonly<{
   };
 
   const observeProviderActivity = (message: unknown, expectedSessionId: string): void => {
-    const row = message as Record<string, unknown>;
-    if (row.isReplay === true || row.is_replay === true) return;
+    if (isReplaySdkMessage(message)) return;
+    if (readFirstNonEmptyString(message, 'session_id', 'sessionId') === expectedSessionId) {
+      opts.onProviderEvent?.();
+    }
     const activity = readClaudeProviderTaskActivity(message, expectedSessionId);
     if (activity) {
       if (activity.sessionId !== expectedSessionId) return;
@@ -161,6 +166,7 @@ export function createClaudeLocalLifecycleTracker(opts: Readonly<{
       if (isSidechainSessionHook(data)) {
         return;
       }
+      if (isLivePrimaryClaudeProviderHook(data)) opts.onProviderEvent?.();
       const hookEventName = readSessionHookEventName(data);
       if (hookEventName === 'UserPromptSubmit') {
         if (isClaudeTaskNotificationUserPromptHook(data)) {

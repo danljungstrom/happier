@@ -184,6 +184,7 @@ export async function claudeLocalLauncher(
         };
         const lifecycleTracker = createClaudeLocalLifecycleTracker({
             lifecycle: turnLifecycle,
+            onProviderEvent: () => session.client.sessionTurnLifecycle?.observeProviderTurnEvent(),
             runtimeActivityAdapter: session.getProviderTaskRuntimeActivityAdapter(),
             providerActivityLedger: session.getProviderTaskActivityLedger() ?? undefined,
         });
