@@ -12,7 +12,6 @@ const COMPACT_ACTIONS_MAX_WIDTH = 560;
 
 export const NewSessionDraftComposerActions = React.memo(function NewSessionDraftComposerActions(props: Readonly<{
     deleteDisabled: boolean;
-    startAnotherDisabled?: boolean;
     onStartAnother: () => void;
     onDelete: () => Promise<void>;
 }>): React.ReactElement {
@@ -38,8 +37,6 @@ export const NewSessionDraftComposerActions = React.memo(function NewSessionDraf
                 testID="new-session-draft-start-another"
                 accessibilityRole="button"
                 accessibilityLabel={t('sessionDrafts.startAnother')}
-                accessibilityState={{ disabled: props.startAnotherDisabled === true }}
-                disabled={props.startAnotherDisabled === true}
                 onPress={props.onStartAnother}
                 hitSlop={{ top: 4, bottom: 4 }}
                 style={{
@@ -48,7 +45,6 @@ export const NewSessionDraftComposerActions = React.memo(function NewSessionDraf
                     flexDirection: 'row',
                     gap: 5,
                     minHeight: 36,
-                    opacity: props.startAnotherDisabled === true ? 0.4 : 1,
                     paddingHorizontal: 8,
                 }}
             >

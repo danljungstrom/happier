@@ -232,7 +232,6 @@ function NewSessionScreenForDraft(props: Readonly<{ draftId: string }>) {
         showDraftActions ? (
             <NewSessionDraftComposerActions
                 deleteDisabled={hasUnresolvedLaunch || state.isCreating}
-                startAnotherDisabled={state.isCreating}
                 onStartAnother={startAnother}
                 onDelete={deleteDraft}
             />
