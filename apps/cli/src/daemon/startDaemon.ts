@@ -7990,7 +7990,7 @@ export async function startDaemon(options: Readonly<{ takeover?: boolean }> = {}
                 };
               },
               recordDiagnostic: (event) => {
-                logger.debug('[DAEMON RUN] Connected-service quota diagnostic', event);
+                logger.infoFile('[DAEMON RUN] Connected-service quota diagnostic', event);
               },
               // RD-QUO-13: produce the (previously consumer-only) quota blocked/recovered
               // surfaces from the coordinator's edge-triggered lifecycle transitions —
@@ -8039,7 +8039,7 @@ export async function startDaemon(options: Readonly<{ takeover?: boolean }> = {}
                     // result are emitted by the deferral-queue and restart-diagnostic events
                     // respectively when a restart-resume is chosen.
                     const result = await switchCoordinator.switchBeforeTurn(input);
-                    logger.debug('[DAEMON RUN] Connected-service proactive quota switch attempt', {
+                    logger.infoFile('[DAEMON RUN] Connected-service proactive quota switch attempt', {
                       trigger: 'automatic_group_switch',
                       decision: 'proactive_quota_switch_before_turn',
                       sessionId,
