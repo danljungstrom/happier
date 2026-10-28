@@ -56,6 +56,21 @@ describe('NewSessionDraftComposerActions', () => {
         expect(screen.findByTestId('new-session-draft-actions-menu')).toBeNull();
     });
 
+    it('disables both actions while the draft is being launched', async () => {
+        const { NewSessionDraftComposerActions } = await import('./NewSessionDraftComposerActions');
+        const screen = await renderScreen(
+            <NewSessionDraftComposerActions
+                deleteDisabled
+                startAnotherDisabled
+                onStartAnother={vi.fn()}
+                onDelete={vi.fn(async () => undefined)}
+            />,
+        );
+
+        expect(screen.findByTestId('new-session-draft-start-another')?.props.disabled).toBe(true);
+        expect(screen.findByTestId('new-session-draft-delete')?.props.disabled).toBe(true);
+    });
+
     it('keeps Start another direct and moves only Delete into overflow on compact composers', async () => {
         dimensions.width = 390;
         const { NewSessionDraftComposerActions } = await import('./NewSessionDraftComposerActions');
