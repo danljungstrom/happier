@@ -88,7 +88,7 @@ function NewSessionScreenInner(props: Readonly<{
             footer={footer}
             composerTopContent={props.composerTopContent}
             statusBadges={props.statusBadges}
-            statusTrailingActions={props.renderStatusTrailingActions?.({ isCreating: footer.isCreating })}
+            statusTrailingActions={props.renderStatusTrailingActions?.({ isCreating: footer?.isCreating ?? false })}
         />
     );
 }
