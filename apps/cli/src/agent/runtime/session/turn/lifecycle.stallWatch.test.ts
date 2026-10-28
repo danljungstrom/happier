@@ -155,6 +155,24 @@ describe('SessionTurnLifecycle turn stall watch', () => {
         expect(h.notices).toHaveLength(1);
     });
 
+    it('honors thresholds beyond the platform single-timer range', async () => {
+        const stallWarnMs = 2_147_483_647 + 60_000;
+        const h = createStallWatchHarness({ stallWarnMs });
+        await h.lifecycle.beginTurn({ provider: 'claude' });
+
+        h.advance(1);
+        expect(h.notices).toHaveLength(0);
+        h.advance(2_147_483_646);
+        expect(h.notices).toHaveLength(0);
+        h.advance(59_999);
+        expect(h.notices).toHaveLength(0);
+        h.advance(1);
+        expect(h.notices).toEqual([expect.objectContaining({
+            stallMs: stallWarnMs,
+            lastEventAgeMs: stallWarnMs,
+        })]);
+    });
+
     it('arms and disarms through ACP lifecycle markers', async () => {
         const h = createStallWatchHarness({ stallWarnMs: STALL_WARN_MS });
         const started = h.lifecycle.observeAcpLifecycleMarker({

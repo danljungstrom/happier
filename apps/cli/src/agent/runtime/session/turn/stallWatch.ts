@@ -11,6 +11,8 @@ import { logger } from '@/ui/logger';
  * observation surface, not a control surface.
  */
 export const DEFAULT_TURN_STALL_WARN_MS = 15 * 60_000;
+// Node timers overflow above the signed 32-bit delay range on all platforms.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 export type TurnStallNotice = Readonly<{
     /** Configured silence threshold that this episode exceeded. */
@@ -81,15 +83,18 @@ export function createTurnStallWatchdog(params: Readonly<{
         timer = null;
     }
 
-    function schedule(atMs: number): void {
-        clearTimer();
-        lastEventAtMs = atMs;
+    function scheduleRemaining(delayMs: number): void {
         timer = setTimeout(() => {
             timer = null;
             const described = params.describeActiveTurn();
             if (!described) return;
             const nowMs = params.now();
             const lastEventAt = lastEventAtMs ?? nowMs;
+            const remainingMs = stallWarnMs - (nowMs - lastEventAt);
+            if (remainingMs > 0) {
+                scheduleRemaining(remainingMs);
+                return;
+            }
             onStallNotice({
                 stallMs: stallWarnMs,
                 lastEventAgeMs: Math.max(0, nowMs - lastEventAt),
@@ -98,8 +103,14 @@ export function createTurnStallWatchdog(params: Readonly<{
                 ...(described.provider ? { provider: described.provider } : {}),
                 ...(described.providerTurnId ? { providerTurnId: described.providerTurnId } : {}),
             });
-        }, stallWarnMs);
+        }, Math.min(MAX_TIMER_DELAY_MS, delayMs));
         timer.unref?.();
+    }
+
+    function schedule(atMs: number): void {
+        clearTimer();
+        lastEventAtMs = atMs;
+        scheduleRemaining(stallWarnMs);
     }
 
     return {
