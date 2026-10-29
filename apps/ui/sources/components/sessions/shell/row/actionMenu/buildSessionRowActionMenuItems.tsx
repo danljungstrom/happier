@@ -162,5 +162,6 @@ export function buildSessionRowMoreMenuItems(params: SessionRowMoreMenuBuildPara
         ...(params.leadingItems ?? []),
         ...remainingItems,
         ...(moveToFolderItem ? [moveToFolderItem] : []),
+        ...(params.trailingItems ?? []),
     ];
 }

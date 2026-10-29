@@ -1219,6 +1219,15 @@ export const pt: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Salvar diagnósticos",
+      diagnosticsSaveFailed: "Não foi possível salvar os diagnósticos. Os detalhes do erro continuam disponíveis. Tente novamente ou copie-os.",
+      copyFailed: "Não foi possível copiar os detalhes da falha. Tente novamente.",
+      discardFailed: "Não foi possível descartar a falha guardada. Tente novamente.",
+      restartWithoutReport: "Reiniciar sem guardar",
+      reportSaveFailed: "Não foi possível guardar os detalhes da falha. Copie-os antes de reiniciar ou tente reportar novamente.",
+      savedReportNotice: "A falha guardada aparece abaixo. Reveja e edite antes de enviar. Permanece neste dispositivo até ser enviada ou descartada.",
+      discardSavedReport: "Descartar falha guardada",
+      stackTruncated: "Pilha abreviada para este campo. A falha completa continua guardada neste dispositivo.",
     title: "Algo correu mal",
     subtitle:
       "O Happier encontrou um erro inesperado. Pode reiniciar a interface da app ou copiar os detalhes para suporte.",
@@ -3661,6 +3670,10 @@ export const pt: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Usar a barra de título do Windows',
+    nativeTitleBarSubtitle: 'Mostrar a moldura e os controles de janela padrão do Windows.',
+    nativeTitleBarChangeFailed: 'Não foi possível alterar a barra de título. Tente novamente.',
+    nativeTitleBarPersistenceFailed: 'Não foi possível carregar ou salvar a preferência da barra de título. Altere-a novamente para tentar outra vez.',
     title: 'Área de trabalho',
     footer: 'Controla como o Happier se comporta neste computador.',
     backgroundServiceTitle: 'Continuar acessível em segundo plano',
@@ -6898,6 +6911,9 @@ export const pt: TranslationStructure = {
     tmuxFallback: "Fallback do tmux",
     copyMetadata: "Copiar metadados",
     copyDebugInformation: "Copiar informações",
+    sessionInformation: "Informações da sessão",
+    happierSessionId: "ID da sessão Happier",
+    providerSessionId: ({ provider }: { provider: string }) => `ID da sessão ${provider}`,
     debugInformationCopyLabel: "Informações",
     providerSessionLogs: ({ provider }: { provider: string }) => `Logs da sessão ${provider}`,
     agentState: "Estado do agente",
@@ -6930,6 +6946,8 @@ export const pt: TranslationStructure = {
     deleteSessionConfirm: "Excluir sessão permanentemente?",
     deleteSessionWarning:
       "Esta ação não pode ser desfeita. Todas as mensagens e dados associados a esta sessão serão excluídos permanentemente.",
+    stopAndDeleteSession: "Parar e excluir",
+    stopAndDeleteSessionWarning: "Isso interromperá a sessão e excluirá permanentemente todas as suas mensagens e dados. Esta ação não pode ser desfeita.",
     failedToDeleteSession: "Falha ao excluir sessão",
     sessionDeleted: "Sessão excluída com sucesso",
     manageSharing: "Gerenciar compartilhamento",
@@ -10414,6 +10432,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Permissões de câmera são necessárias para conectar terminal",
     failedToLinkDevice: "Falha ao vincular dispositivo",
+    deviceLinkRequestNotFound: "Não foi encontrado nenhum pedido de vinculação pendente neste relay. Verifique se ambos os dispositivos usam o mesmo relay e gere um novo código QR.",
     cameraPermissionsRequiredToScanQr:
       "Permissões de câmera são necessárias para escanear códigos QR",
     qrScannerUnavailable:

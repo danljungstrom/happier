@@ -20,7 +20,9 @@ Do not introduce direct product-runtime calls to:
 - shell installers from UI/daemon/runtime code
 - PATH-only provider detection as the sole source of truth
 
-These are allowed only behind centralized managed runtime/tooling abstractions.
+These calls require the canonical runtime/tooling owner. Happier-owned prerequisites
+use managed runtimes; explicitly configured external commands retain the user's
+chosen executable and its prerequisites.
 
 Before adding or changing a provider/runtime/install/update flow, classify it as one of:
 
@@ -31,6 +33,23 @@ Before adding or changing a provider/runtime/install/update flow, classify it as
 - managed JS-runtime dependent
 
 Provider detection, install status, daemon validation, runtime spawning, and UI/installables must reuse the same source of truth. Backend CLIs should prefer user/system installs by default over Happier-managed installs unless an explicit setting says otherwise.
+
+In current development source (not yet released), MCP package-runner resolution
+honors configured `npx`, `npm`, `yarn`, `pnpm`, and `bunx` commands, including explicit
+executable paths. `normalizePackageRunnerInvocation` resolves the executable using
+the configured environment while preserving its arguments; MCP materialization
+launches it in the session directory. A missing executable produces an actionable
+prerequisite warning, or an error in strict mode. It never triggers managed pnpm
+bootstrap or a substitute runner, including after an execution error. Managed pnpm
+remains the installation tool for Happier-owned managed packages.
+
+In current development source (not yet released), managed pnpm and JavaScript
+runtime bootstrap accept the shared `ManagedToolBootstrapOptions`: an abort signal
+and progress callbacks for lock waiting, release lookup, download bytes, and
+installation. Their lock waits and downloads honor cancellation; failed bootstrap
+propagates its error instead of silently falling back to a PATH command. Installers
+that expose progress and errors consume these signals through their existing
+output. This adds no elapsed-time cutoff, persistent cooldown, or download resume.
 
 In current development source, Windows command discovery and invocation share
 `packages/cli-common/windowsCommandInvocation.mjs`. A recognized npm wrapper that
@@ -562,7 +581,15 @@ types and helpers, including Homebridge's unconditionally imported `prebuild-fil
 The shared PTY permission owner
 repairs `spawn-helper` in both build and prebuild locations during package installation and
 artifact finalization. Foreign `ps-list` fastlist executables are omitted on non-Windows targets;
-Windows keeps them. Happier's Agent SDK runner always supplies the separately installed Claude
+Windows keeps them. In current development source, the shared Bun compiler loads `ps-list`
+on Windows from the existing on-disk dependency payload through the canonical CLI runtime-root resolver,
+including installed channel shortcuts. This preserves the dependency's own parser and Windows
+helper lookup: bundling its `import.meta.url` would point at Bun's virtual filesystem instead.
+POSIX keeps the dependency's JavaScript embedded, including in detached installer runners.
+The legacy Claude SDK launcher records unverified process cleanup through the existing
+primary-session turn lifecycle, allocating a failed turn when idle, before preserving the
+resume identity and exiting. Failed issue publication is logged and does not admit a replacement.
+Happier's Agent SDK runner always supplies the separately installed Claude
 Code executable, so standalone artifacts keep the SDK's JavaScript package but omit its unused
 optional native CLI fallback packages. Target-specific standalone payloads retain executable
 source maps for Bun and Node diagnostics and dependency declarations for SDK/plugin authoring.

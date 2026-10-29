@@ -1900,6 +1900,15 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     appCrash: {
+        saveDiagnostics: "儲存診斷資訊",
+        diagnosticsSaveFailed: "無法儲存診斷資訊。當機詳細資料仍可使用。請重試或複製詳細資料。",
+        copyFailed: "無法複製當機詳細資料。請重試。",
+        discardFailed: "無法捨棄已儲存的當機。請重試。",
+        restartWithoutReport: "不儲存並重新啟動",
+        reportSaveFailed: "無法儲存當機詳細資料。請在重新啟動前複製錯誤詳細資料，或重試回報。",
+        savedReportNotice: "已儲存的當機顯示於下方。請在提交前檢查並編輯。提交或捨棄前，資訊會保留在此裝置上。",
+        discardSavedReport: "捨棄已儲存的當機",
+        stackTruncated: "此欄位中的堆疊已縮短。完整當機資訊仍儲存在此裝置上。",
         title: '發生錯誤',
         subtitle: 'Happier 發生了非預期的錯誤。你可以重新啟動應用程式介面，或複製詳細資訊以便支援排查。',
         detailsTitle: '錯誤詳細資訊',
@@ -3237,6 +3246,10 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
 		    settingsDesktop: {
+		        nativeTitleBarTitle: '使用 Windows 標題列',
+		        nativeTitleBarSubtitle: '顯示 Windows 標準視窗邊框和控制按鈕。',
+		        nativeTitleBarChangeFailed: '無法變更標題列。請再試一次。',
+		        nativeTitleBarPersistenceFailed: '無法載入或儲存標題列偏好設定。請再次變更此設定以重試。',
 		        title: '桌面',
 		        footer: '控制 Happier 在這台電腦上的行為。',
 		        backgroundServiceTitle: '在背景保持可連線',
@@ -5747,6 +5760,9 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         happyHome: 'Happier 主目錄',
         copyMetadata: '複製中繼資料',
         copyDebugInformation: '複製資訊',
+        sessionInformation: "工作階段資訊",
+        happierSessionId: "Happier 工作階段 ID",
+        providerSessionId: ({ provider }: { provider: string }) => `${provider} 工作階段 ID`,
         debugInformationCopyLabel: '資訊',
         providerSessionLogs: ({ provider }: { provider: string }) => `${provider} 工作階段日誌`,
         agentState: 'Agent 狀態',
@@ -5768,6 +5784,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         deleteSessionSubtitle: '永久刪除此工作階段',
         deleteSessionConfirm: '永久刪除工作階段？',
         deleteSessionWarning: '此操作無法復原。與此工作階段相關的所有訊息和資料將被永久刪除。',
+        stopAndDeleteSession: "停止並刪除",
+        stopAndDeleteSessionWarning: "這將停止工作階段，並永久刪除其所有訊息和資料。此操作無法復原。",
         failedToDeleteSession: '刪除工作階段失敗',
         sessionDeleted: '工作階段刪除成功',
         forkSession: '分支工作階段',
@@ -8347,6 +8365,7 @@ settingsSession: {
         failedToConnectTerminal: '連線終端失敗',
         cameraPermissionsRequiredToConnectTerminal: '連線終端需要相機權限',
         failedToLinkDevice: '連結裝置失敗',
+        deviceLinkRequestNotFound: "此中繼上沒有待處理的裝置連結請求。請確認兩台裝置使用相同的中繼，然後產生新的 QR 碼。",
         cameraPermissionsRequiredToScanQr: '掃描 QR Code 需要相機權限',
         qrScannerUnavailable: '無法開啟 QR 掃描器。請再試一次或手動輸入 URL。'
     },

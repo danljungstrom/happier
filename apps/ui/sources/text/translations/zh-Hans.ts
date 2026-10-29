@@ -1155,6 +1155,15 @@ export const zhHans: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "保存诊断信息",
+      diagnosticsSaveFailed: "无法保存诊断信息。崩溃详情仍然可用。请重试或复制详情。",
+      copyFailed: "无法复制崩溃详情。请重试。",
+      discardFailed: "无法丢弃已保存的崩溃。请重试。",
+      restartWithoutReport: "不保存并重启",
+      reportSaveFailed: "无法保存崩溃详情。请在重启前复制错误详情，或重试报告。",
+      savedReportNotice: "已保存的崩溃显示在下方。请在提交前检查并编辑。提交或丢弃前，信息会保留在此设备上。",
+      discardSavedReport: "丢弃已保存的崩溃",
+      stackTruncated: "此字段中的堆栈已缩短。完整崩溃信息仍保存在此设备上。",
     title: "出错了",
     subtitle: "Happier 发生了意外错误。你可以重启应用界面，或复制详细信息以便支持排查。",
     detailsTitle: "错误详情",
@@ -3438,6 +3447,10 @@ export const zhHans: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: '使用 Windows 标题栏',
+    nativeTitleBarSubtitle: '显示 Windows 标准窗口边框和控制按钮。',
+    nativeTitleBarChangeFailed: '无法更改标题栏。请重试。',
+    nativeTitleBarPersistenceFailed: '无法加载或保存标题栏偏好设置。请再次更改此设置以重试。',
     title: '桌面',
     footer: '控制 Happier 在这台电脑上的行为。',
     backgroundServiceTitle: '在后台保持可连接',
@@ -6564,6 +6577,9 @@ export const zhHans: TranslationStructure = {
     tmuxFallback: "tmux 回退",
     copyMetadata: "复制元数据",
     copyDebugInformation: "复制信息",
+    sessionInformation: "会话信息",
+    happierSessionId: "Happier 会话 ID",
+    providerSessionId: ({ provider }: { provider: string }) => `${provider} 会话 ID`,
     debugInformationCopyLabel: "信息",
     providerSessionLogs: ({ provider }: { provider: string }) => `${provider} 会话日志`,
     agentState: "Agent 状态",
@@ -6595,6 +6611,8 @@ export const zhHans: TranslationStructure = {
     deleteSessionConfirm: "永久删除会话？",
     deleteSessionWarning:
       "此操作无法撤销。与此会话相关的所有消息和数据将被永久删除。",
+    stopAndDeleteSession: "停止并删除",
+    stopAndDeleteSessionWarning: "这将停止会话，并永久删除其所有消息和数据。此操作无法撤销。",
     failedToDeleteSession: "删除会话失败",
     sessionDeleted: "会话删除成功",
     manageSharing: "管理共享",
@@ -9939,6 +9957,7 @@ settingsSession: {
     failedToConnectTerminal: "连接终端失败",
     cameraPermissionsRequiredToConnectTerminal: "连接终端需要相机权限",
     failedToLinkDevice: "链接设备失败",
+    deviceLinkRequestNotFound: "此中继上没有待处理的设备关联请求。请确认两台设备使用同一个中继，然后生成新的二维码。",
     cameraPermissionsRequiredToScanQr: "扫描二维码需要相机权限",
     qrScannerUnavailable: "无法打开二维码扫描器。请重试或手动输入 URL。",
   },

@@ -404,6 +404,8 @@ function parseEnvBoundedInt(
 
 export function registerMachineRpcHandlers(params: Readonly<{
   rpcHandlerManager: RpcHandlerManager;
+  /** Receiver identity; callers without it retain raw paths but cannot use workspace mappings. */
+  machineId?: string;
   handlers: MachineRpcHandlers;
   deps?: MachineRpcHandlerDeps;
 }>): MachineRpcLifecycleRegistration {
@@ -1552,7 +1554,7 @@ export function registerMachineRpcHandlers(params: Readonly<{
 
     const directory = resolveSessionWorkspaceRootForMachine({
       metadata: parentMetadata,
-      machineId: typeof parentMetadata.machineId === 'string' ? parentMetadata.machineId : '',
+      machineId: params.machineId ?? '',
       candidatePath: typeof parentMetadata.path === 'string' ? parentMetadata.path.trim() : '',
     }).machinePath;
     if (!directory) {

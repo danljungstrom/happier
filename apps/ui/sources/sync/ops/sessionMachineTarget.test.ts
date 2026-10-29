@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RPC_ERROR_CODES } from '@happier-dev/protocol/rpc';
 import { createRpcCallError } from '@/sync/runtime/rpcErrors';
+import { createMachineFixture } from '@/dev/testkit/fixtures/machineFixtures';
+import type { SessionMachineTargetState } from './sessionMachineTarget';
 
 const getStateSpy = vi.fn();
 
@@ -14,6 +16,24 @@ vi.mock('@/sync/domains/state/storage', async () => {
 });
 
 describe('sessionMachineTarget', () => {
+    it.each(['replacement', 'locality'] as const)('does not recover an old workspace on a %s target', async (kind) => {
+        const { resolveMachineControlTargetForSessionFromState } = await import('./sessionMachineTarget');
+        const current = createMachineFixture({ id: 'machine-new' });
+        const old = createMachineFixture({ id: 'machine-old', active: false, replacedByMachineId: 'machine-new' });
+        const state: SessionMachineTargetState = {
+            sessions: { direct: { active: false, metadata: {
+                path: '', machineId: 'machine-old', host: current.metadata!.host, homeDir: current.metadata!.homeDir,
+                sessionWorkspaceLocationV1: { v: 1, machineId: 'machine-old',
+                    agentPath: '/agent/old', machinePath: '/host/old' },
+            } } },
+            machines: kind === 'replacement' ? { 'machine-old': old, 'machine-new': current } : { 'machine-new': current },
+        };
+        expect(resolveMachineControlTargetForSessionFromState(state, 'direct')).toBeNull();
+        expect(resolveMachineControlTargetForSessionFromState({ ...state,
+            getProjectForSession: () => ({ key: { machineId: 'machine-new', path: '/new/project' } }),
+        }, 'direct')).toMatchObject({ machineId: 'machine-new', basePath: '/new/project' });
+    });
+
     it('targets an existing Direct session with an empty path using its same-machine workspace mapping', async () => {
         const { resolveMachineControlTargetForSessionFromState } = await import('./sessionMachineTarget');
         const state = {

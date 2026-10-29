@@ -8,6 +8,7 @@ import type { DropdownMenuItem } from '@/components/ui/forms/dropdown/DropdownMe
 import { confirmSessionStop, executeSessionAction } from '@/components/sessions/actions/sessionActionExecution';
 import {
     SESSION_ACTION_ARCHIVE_ID,
+    SESSION_ACTION_DELETE_ID,
     SESSION_ACTION_CLEAR_ATTENTION_STANDING_ID,
     SESSION_ACTION_EDIT_TAGS_ID,
     SESSION_ACTION_MARK_READ_ID,
@@ -112,7 +113,8 @@ export function useSessionRowActionMenu(params: Readonly<{
     onTogglePinned?: (() => void) | null;
     onMoveToFolder?: () => void;
     leadingMenuItems?: readonly DropdownMenuItem[];
-    onSelectLeadingMenuItem?: (itemId: string) => void | Promise<void>;
+    trailingMenuItems?: readonly DropdownMenuItem[];
+    onSelectCustomMenuItem?: (itemId: string) => void | Promise<void>;
     selectionModeAvailable?: boolean;
     selectionModeActive?: boolean;
     onEnterSelectionMode?: () => void;
@@ -252,6 +254,7 @@ export function useSessionRowActionMenu(params: Readonly<{
             target,
             iconColor: params.iconColor,
             leadingItems: params.leadingMenuItems,
+            trailingItems: params.trailingMenuItems,
             canMoveToFolder: typeof params.onMoveToFolder === 'function',
             reminderPresets,
             reminder: params.reminder,
@@ -279,6 +282,7 @@ export function useSessionRowActionMenu(params: Readonly<{
         params.iconColor,
         params.isNativeMobile,
         params.leadingMenuItems,
+        params.trailingMenuItems,
         params.onEnterSelectionMode,
         params.onMoveToFolder,
         params.selectionModeActive,
@@ -288,17 +292,18 @@ export function useSessionRowActionMenu(params: Readonly<{
         target,
     ]);
 
-    const leadingMenuItemIds = React.useMemo(() => {
-        return new Set((params.leadingMenuItems ?? []).map((item) => item.id));
-    }, [params.leadingMenuItems]);
+    const customMenuItems = React.useMemo(
+        () => [...(params.leadingMenuItems ?? []), ...(params.trailingMenuItems ?? [])],
+        [params.leadingMenuItems, params.trailingMenuItems],
+    );
 
     const handleMoreMenuSelect = React.useCallback(async (itemId: string) => {
         if (itemId === 'selection.select') {
             params.onEnterSelectionMode?.();
             return;
         }
-        if (leadingMenuItemIds.has(itemId)) {
-            await params.onSelectLeadingMenuItem?.(itemId);
+        if (findMenuItem(customMenuItems, itemId)) {
+            await params.onSelectCustomMenuItem?.(itemId);
             return;
         }
         if (params.appearance && itemId.startsWith(`${SESSION_ACTION_SET_APPEARANCE_COLOR_ID}:`)) {
@@ -378,6 +383,13 @@ export function useSessionRowActionMenu(params: Readonly<{
             case SESSION_ACTION_ARCHIVE_ID:
                 await confirmArchiveSession();
                 break;
+            case SESSION_ACTION_DELETE_ID:
+                try {
+                    await executeSessionAction({ actionId: SESSION_ACTION_DELETE_ID, target });
+                } catch (error) {
+                    showActionError(error);
+                }
+                break;
         }
     }, [
         confirmArchiveSession,
@@ -385,12 +397,12 @@ export function useSessionRowActionMenu(params: Readonly<{
         handleAttentionStandingAction,
         handleReadStateAction,
         handleRenameSession,
-        leadingMenuItemIds,
+        customMenuItems,
         target,
         params.appearance,
         params.onEnterSelectionMode,
         params.onMoveToFolder,
-        params.onSelectLeadingMenuItem,
+        params.onSelectCustomMenuItem,
         reminderPresets,
         setReminderPresets,
     ]);

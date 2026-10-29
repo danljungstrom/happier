@@ -1153,6 +1153,15 @@ export const ja: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "診断情報を保存",
+      diagnosticsSaveFailed: "診断情報を保存できませんでした。エラーの詳細は引き続き利用できます。もう一度試すか、コピーしてください。",
+      copyFailed: "クラッシュの詳細をコピーできませんでした。再試行してください。",
+      discardFailed: "保存されたクラッシュを破棄できませんでした。再試行してください。",
+      restartWithoutReport: "保存せずに再起動",
+      reportSaveFailed: "クラッシュの詳細を保存できませんでした。再起動する前にエラーの詳細をコピーするか、報告を再試行してください。",
+      savedReportNotice: "保存されたクラッシュを以下に表示しています。送信前に確認・編集してください。送信または破棄するまで、この端末に保持されます。",
+      discardSavedReport: "保存されたクラッシュを破棄",
+      stackTruncated: "この欄ではスタックを短縮しています。完全なクラッシュ情報はこの端末に保存されています。",
     title: "問題が発生しました",
     subtitle:
       "Happierで予期しないエラーが発生しました。アプリUIを再起動するか、サポート用に詳細をコピーできます。",
@@ -3832,6 +3841,10 @@ localTailscale: {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Windows のタイトルバーを使用',
+    nativeTitleBarSubtitle: 'Windows 標準のウィンドウ枠と操作ボタンを表示します。',
+    nativeTitleBarChangeFailed: 'タイトルバーを変更できませんでした。もう一度お試しください。',
+    nativeTitleBarPersistenceFailed: 'タイトルバーの設定を読み込むか保存することができませんでした。設定をもう一度変更して再試行してください。',
     title: 'デスクトップ',
     footer: 'このコンピューターでの Happier の動作を設定します。',
     backgroundServiceTitle: 'バックグラウンドで接続を維持',
@@ -7041,6 +7054,9 @@ localTailscale: {
     tmuxFallback: "tmux フォールバック",
     copyMetadata: "メタデータをコピー",
     copyDebugInformation: "情報をコピー",
+    sessionInformation: "セッション情報",
+    happierSessionId: "Happier セッション ID",
+    providerSessionId: ({ provider }: { provider: string }) => `${provider} セッション ID`,
     debugInformationCopyLabel: "情報",
     providerSessionLogs: ({ provider }: { provider: string }) => `${provider} セッションログ`,
     agentState: "エージェント状態",
@@ -7073,6 +7089,8 @@ localTailscale: {
     deleteSessionConfirm: "セッションを完全に削除しますか？",
     deleteSessionWarning:
       "この操作は取り消せません。このセッションに関連するすべてのメッセージとデータが完全に削除されます。",
+    stopAndDeleteSession: "停止して削除",
+    stopAndDeleteSessionWarning: "セッションを停止し、すべてのメッセージとデータを完全に削除します。この操作は取り消せません。",
     failedToDeleteSession: "セッションの削除に失敗しました",
     sessionDeleted: "セッションが正常に削除されました",
     manageSharing: "共有を管理",
@@ -10529,6 +10547,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "ターミナルの接続にはカメラの権限が必要です",
     failedToLinkDevice: "デバイスのリンクに失敗しました",
+    deviceLinkRequestNotFound: "このリレーに保留中のデバイス連携リクエストが見つかりませんでした。両方のデバイスで同じリレーを使用していることを確認し、新しいQRコードを生成してください。",
     cameraPermissionsRequiredToScanQr:
       "QRコードのスキャンにはカメラの権限が必要です",
     qrScannerUnavailable:

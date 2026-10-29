@@ -1170,6 +1170,15 @@ export const it: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Salva diagnostica",
+      diagnosticsSaveFailed: "Impossibile salvare la diagnostica. I dettagli dell’errore sono ancora disponibili. Riprova o copiali.",
+      copyFailed: "Impossibile copiare i dettagli del crash. Riprova.",
+      discardFailed: "Impossibile eliminare il crash salvato. Riprova.",
+      restartWithoutReport: "Riavvia senza salvare",
+      reportSaveFailed: "Impossibile salvare i dettagli del crash. Copiali prima di riavviare oppure riprova la segnalazione.",
+      savedReportNotice: "Il crash salvato è mostrato qui sotto. Controllalo e modificalo prima di inviarlo. Resta su questo dispositivo fino all’invio o all’eliminazione.",
+      discardSavedReport: "Elimina il crash salvato",
+      stackTruncated: "Stack abbreviato per questo campo. Il crash completo resta salvato su questo dispositivo.",
     title: "Qualcosa è andato storto",
     subtitle:
       "Happier ha riscontrato un errore imprevisto. Puoi riavviare l'interfaccia dell'app o copiare i dettagli per l'assistenza.",
@@ -3883,6 +3892,10 @@ export const it: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Usa la barra del titolo di Windows',
+    nativeTitleBarSubtitle: 'Mostra la cornice e i controlli della finestra standard di Windows.',
+    nativeTitleBarChangeFailed: 'Impossibile modificare la barra del titolo. Riprova.',
+    nativeTitleBarPersistenceFailed: 'Impossibile caricare o salvare la preferenza della barra del titolo. Modificala di nuovo per riprovare.',
     title: 'Scrivania',
     footer: 'Controlla come si comporta Happier su questo computer.',
     backgroundServiceTitle: 'Restare raggiungibile in background',
@@ -7111,6 +7124,9 @@ export const it: TranslationStructure = {
     tmuxFallback: "Fallback tmux",
     copyMetadata: "Copia metadati",
     copyDebugInformation: "Copia informazioni",
+    sessionInformation: "Informazioni sulla sessione",
+    happierSessionId: "ID sessione Happier",
+    providerSessionId: ({ provider }: { provider: string }) => `ID sessione ${provider}`,
     debugInformationCopyLabel: "Informazioni",
     providerSessionLogs: ({ provider }: { provider: string }) => `Log sessione ${provider}`,
     agentState: "Stato agente",
@@ -7142,6 +7158,8 @@ export const it: TranslationStructure = {
     deleteSessionConfirm: "Eliminare definitivamente la sessione?",
     deleteSessionWarning:
       "Questa azione non può essere annullata. Tutti i messaggi e i dati associati a questa sessione verranno eliminati definitivamente.",
+    stopAndDeleteSession: "Interrompi ed elimina",
+    stopAndDeleteSessionWarning: "Questa azione interromperà la sessione ed eliminerà definitivamente tutti i suoi messaggi e dati. Questa azione non può essere annullata.",
     failedToDeleteSession: "Impossibile eliminare la sessione",
     sessionDeleted: "Sessione eliminata con successo",
     manageSharing: "Gestisci condivisione",
@@ -10625,6 +10643,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Sono necessarie le autorizzazioni della fotocamera per connettere il terminale",
     failedToLinkDevice: "Impossibile collegare il dispositivo",
+    deviceLinkRequestNotFound: "Non è stata trovata alcuna richiesta di collegamento in attesa su questo relay. Verifica che entrambi i dispositivi usino lo stesso relay, poi genera un nuovo codice QR.",
     cameraPermissionsRequiredToScanQr:
       "Sono necessarie le autorizzazioni della fotocamera per scansionare i codici QR",
     qrScannerUnavailable:

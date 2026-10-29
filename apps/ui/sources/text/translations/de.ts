@@ -1015,6 +1015,15 @@ export const de: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Diagnosedaten speichern",
+        diagnosticsSaveFailed: "Die Diagnosedaten konnten nicht gespeichert werden. Die Fehlerdetails sind weiterhin verfügbar. Versuche es erneut oder kopiere sie.",
+        copyFailed: "Die Absturzdetails konnten nicht kopiert werden. Versuche es erneut.",
+        discardFailed: "Der gespeicherte Absturz konnte nicht verworfen werden. Versuche es erneut.",
+        restartWithoutReport: "Ohne Speichern neu starten",
+        reportSaveFailed: "Die Absturzdetails konnten nicht gespeichert werden. Kopiere sie vor dem Neustart oder versuche die Meldung erneut.",
+        savedReportNotice: "Der gespeicherte Absturz wird unten angezeigt. Prüfe und bearbeite ihn vor dem Senden. Er bleibt bis zum Senden oder Verwerfen auf diesem Gerät.",
+        discardSavedReport: "Gespeicherten Absturz verwerfen",
+        stackTruncated: "Stack für dieses Feld gekürzt. Der vollständige Absturz bleibt auf diesem Gerät gespeichert.",
         title: 'Da ist etwas schiefgelaufen',
         subtitle: 'Happier ist auf einen unerwarteten Fehler gestoßen. Du kannst die App-Oberfläche neu starten oder Details für den Support kopieren.',
         detailsTitle: 'Fehlerdetails',
@@ -3260,6 +3269,10 @@ export const de: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Windows-Titelleiste verwenden',
+        nativeTitleBarSubtitle: 'Den standardmäßigen Windows-Rahmen und die Fenstersteuerung anzeigen.',
+        nativeTitleBarChangeFailed: 'Die Titelleiste konnte nicht geändert werden. Versuche es erneut.',
+        nativeTitleBarPersistenceFailed: 'Die Einstellung für die Titelleiste konnte nicht geladen oder gespeichert werden. Ändere sie erneut, um es noch einmal zu versuchen.',
         title: 'Desktop',
         footer: 'Steuert, wie sich Happier auf diesem Computer verhält.',
         backgroundServiceTitle: 'Im Hintergrund erreichbar bleiben',
@@ -6388,6 +6401,9 @@ export const de: TranslationStructure = {
         tmuxFallback: 'Tmux-Fallback',
         copyMetadata: 'Metadaten kopieren',
         copyDebugInformation: 'Informationen kopieren',
+        sessionInformation: "Sitzungsinformationen",
+        happierSessionId: "Happier-Sitzungs-ID",
+        providerSessionId: ({ provider }: { provider: string }) => `${provider}-Sitzungs-ID`,
         debugInformationCopyLabel: 'Informationen',
         providerSessionLogs: ({ provider }: { provider: string }) => `${provider} Session-Logs`,
         agentState: 'Agent-Zustand',
@@ -6412,6 +6428,8 @@ export const de: TranslationStructure = {
         deleteSessionSubtitle: 'Diese Session dauerhaft entfernen',
         deleteSessionConfirm: 'Session dauerhaft löschen?',
         deleteSessionWarning: 'Das lässt sich nicht rückgängig machen. Alle Nachrichten und Daten dieser Session werden dauerhaft gelöscht.',
+        stopAndDeleteSession: "Stoppen und löschen",
+        stopAndDeleteSessionWarning: "Dadurch wird die Session gestoppt und alle ihre Nachrichten und Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
         failedToDeleteSession: 'Die Session ließ sich nicht löschen',
         sessionDeleted: 'Session erfolgreich gelöscht',
         renameSession: 'Session umbenennen',
@@ -9728,6 +9746,7 @@ settingsSession: {
         failedToConnectTerminal: 'Das Terminal ließ sich nicht verbinden',
         cameraPermissionsRequiredToConnectTerminal: 'Für die Verbindung mit dem Terminal ist die Kamera-Berechtigung nötig',
         failedToLinkDevice: 'Das Gerät ließ sich nicht verknüpfen',
+        deviceLinkRequestNotFound: "Auf diesem Relay wurde keine ausstehende Verknüpfungsanfrage gefunden. Prüfe, ob beide Geräte dasselbe Relay verwenden, und erstelle dann einen neuen QR-Code.",
         cameraPermissionsRequiredToScanQr: 'Zum Scannen von QR-Codes ist die Kamera-Berechtigung nötig',
         qrScannerUnavailable: 'Der QR-Scanner ließ sich nicht öffnen. Versuch es noch einmal oder gib die URL von Hand ein.'
     },

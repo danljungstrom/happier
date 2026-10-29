@@ -35,7 +35,9 @@ persist the workspace path without decoding the lossy project-directory name.
 For existing links with an empty path, machine targeting and fork use the shared
 workspace-root resolver to recover a valid `sessionWorkspaceLocationV1` for the
 same machine. Agent and host paths remain distinct; a nonempty conflicting path,
-malformed mapping, or foreign-machine mapping is not replaced. This corrects
+malformed mapping, or foreign-machine mapping is not replaced. Target selection
+checks the resolved machine, and fork checks the receiving daemon's identity,
+including when a replacement daemon handles the request. This corrects
 workspace targeting for file transfers and replay/config forks; Claude Direct
 native fork support is unchanged. These corrections have not been released.
 

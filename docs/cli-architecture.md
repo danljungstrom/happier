@@ -918,6 +918,22 @@ is left exactly where it was — the same safe direction as a crash, and the rea
 stops the service on a path it cannot confirm. An `on-demand` service left running that way is stopped
 by the next in-app quit, `happier daemon service stop`, or the settings control.
 
+### Desktop main-window chrome (development)
+
+Current development source keeps compact integrated window controls in the left sidebar by
+default on Windows and Linux; macOS keeps its native traffic lights. Windows users can opt into
+**Use Windows title bar** in desktop settings to show the standard Windows frame and controls.
+The native policy in `apps/ui/src-tauri/src/window_chrome.rs` owns both modes, and the UI derives
+its controls and setting state from that policy's returned result. Both modes keep the same
+close-to-tray behavior: closing the main window hides it, and the tray reopens it.
+
+The native preference owner, `window_chrome_preferences.rs`, stores the choice in the channel's
+AppConfig directory at `window-state/main-window-chrome.json`. It loads before main-window
+creation, and the same creation path applies the resolved decorations when the tray recreates
+the window. Changing the setting applies the native frame immediately. A failed save retains the
+applied runtime mode and exposes the persistence failure in settings so another change can retry.
+This is unreleased development behavior; compatibility with ActualTitleButtons has not been tested.
+
 ### What may repoint this computer's daemon
 
 Moving an already-configured background service to a different relay originates from the **direct

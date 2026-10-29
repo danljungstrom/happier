@@ -1197,6 +1197,15 @@ export const ru: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Сохранить диагностику",
+      diagnosticsSaveFailed: "Не удалось сохранить диагностику. Сведения об ошибке по-прежнему доступны. Повторите попытку или скопируйте их.",
+      copyFailed: "Не удалось скопировать сведения о сбое. Повторите попытку.",
+      discardFailed: "Не удалось удалить сохранённый сбой. Повторите попытку.",
+      restartWithoutReport: "Перезапустить без сохранения",
+      reportSaveFailed: "Не удалось сохранить сведения о сбое. Скопируйте их перед перезапуском или повторите отправку отчёта.",
+      savedReportNotice: "Сохранённый сбой показан ниже. Проверьте и отредактируйте его перед отправкой. Он останется на устройстве до отправки или удаления.",
+      discardSavedReport: "Удалить сохранённый сбой",
+      stackTruncated: "Стек сокращён для этого поля. Полные сведения о сбое сохранены на этом устройстве.",
     title: "Что-то пошло не так",
     subtitle:
       "В Happier произошла непредвиденная ошибка. Можно перезапустить интерфейс приложения или скопировать детали для поддержки.",
@@ -3491,6 +3500,10 @@ export const ru: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Использовать строку заголовка Windows',
+    nativeTitleBarSubtitle: 'Показывать стандартную рамку и кнопки управления окном Windows.',
+    nativeTitleBarChangeFailed: 'Не удалось изменить строку заголовка. Попробуйте ещё раз.',
+    nativeTitleBarPersistenceFailed: 'Не удалось загрузить или сохранить настройку строки заголовка. Измените её снова, чтобы повторить попытку.',
     title: 'Рабочий стол',
     footer: 'Управляет поведением Happier на этом компьютере.',
     backgroundServiceTitle: 'Оставаться доступным в фоне',
@@ -5712,6 +5725,9 @@ export const ru: TranslationStructure = {
     tmuxFallback: "Запасной tmux",
     copyMetadata: "Копировать метаданные",
     copyDebugInformation: "Копировать информацию",
+    sessionInformation: "Информация о сессии",
+    happierSessionId: "ID сессии Happier",
+    providerSessionId: ({ provider }: { provider: string }) => `ID сессии ${provider}`,
     debugInformationCopyLabel: "Информация",
     providerSessionLogs: ({ provider }: { provider: string }) => `Журналы сеанса ${provider}`,
     agentState: "Состояние агента",
@@ -5744,6 +5760,8 @@ export const ru: TranslationStructure = {
     deleteSessionConfirm: "Удалить сессию навсегда?",
     deleteSessionWarning:
       "Это действие нельзя отменить. Все сообщения и данные, связанные с этой сессией, будут удалены навсегда.",
+    stopAndDeleteSession: "Остановить и удалить",
+    stopAndDeleteSessionWarning: "Сессия будет остановлена, а все её сообщения и данные будут удалены навсегда. Это действие нельзя отменить.",
     failedToDeleteSession: "Не удалось удалить сессию",
     sessionDeleted: "Сессия успешно удалена",
     manageSharing: "Управление доступом",
@@ -10261,6 +10279,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Для подключения терминала требуется доступ к камере",
     failedToLinkDevice: "Не удалось связать устройство",
+    deviceLinkRequestNotFound: "На этом ретрансляторе не найден ожидающий запрос на привязку. Убедитесь, что оба устройства используют один и тот же ретранслятор, затем создайте новый QR-код.",
     cameraPermissionsRequiredToScanQr:
       "Для сканирования QR-кодов требуется доступ к камере",
     qrScannerUnavailable:

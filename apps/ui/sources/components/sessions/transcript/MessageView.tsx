@@ -19,7 +19,7 @@ import { shouldShowTranscriptRowActions, shouldShowTranscriptRowPinAction } from
 import { renderStructuredMessage, StructuredMessageBlock } from '@/components/sessions/transcript/structured/StructuredMessageBlock';
 import type { StructuredMessageRendererParams } from '@/components/sessions/transcript/structured/structuredMessageRegistry';
 import { useRouter } from 'expo-router';
-import { buildScopedSessionRouteHref } from '@/hooks/session/sessionRouteServerScope';
+import { useNavigateToSession } from '@/hooks/session/useNavigateToSession';
 import { buildSessionFileDeepLink } from '@/utils/url/sessionFileDeepLink';
 import { fireAndForget } from '@/utils/system/fireAndForget';
 import { Text } from '@/components/ui/text/Text';
@@ -1483,6 +1483,7 @@ function ForkMessageButton(props: {
 }) {
   const { theme } = useUnistyles();
   const router = useRouter();
+  const navigateToSession = useNavigateToSession();
   const sessionForkSupportSource = props.forkCommon.sessionForkSupportSource;
   const hitSlop = Platform.OS === 'web' ? undefined : 15;
   const executionRunsEnabled = props.forkCommon.executionRunsEnabled;
@@ -1519,15 +1520,9 @@ function ForkMessageButton(props: {
       sourceMessageId: props.messageId,
       sourcePreview: restored,
       writeForkInitialPrompt: true,
-      // Keep the transcript row independent of the session-opening hook, but
-      // carry the fork's server scope into the route so child hydration and
-      // navigation agree on the same Session.
-      navigateToSession: (childSessionId, options) => {
-        router.push(buildScopedSessionRouteHref({
-          sessionId: childSessionId,
-          serverId: options?.serverId ?? serverId,
-        }) as any);
-      },
+      navigateToSession: (childSessionId, options) => navigateToSession(childSessionId, {
+        serverId: options?.serverId ?? serverId,
+      }),
       navigateToNewSession: (route) => {
         router.push(route as any);
       },
@@ -1535,6 +1530,7 @@ function ForkMessageButton(props: {
   }, [
     agentSwitchingEnabled,
     executionRunsEnabled,
+    navigateToSession,
     props.isForkAllowed,
     props.messageId,
     props.restoredDraftText,
