@@ -153,6 +153,13 @@ is active, correlated live provider messages reset it at provider ingress, befor
 transcript filtering or buffering. Transcript delivery, historical replay,
 host-generated messages, and presence heartbeats are not provider activity.
 
+Claude Agent SDK 0.2.123 buffers native messages before its public iterator. The
+remote runner observes its supported spawn transport through a byte-preserving
+stdout transform, so transcript persistence cannot delay receipt observation.
+The existing primary-message classifier excludes SDK control frames, replay, and
+sidechains; native init and compaction receipt extend the existing session
+lineage before later messages in the same burst are classified.
+
 After 15 minutes without such an event, the runner writes one `turn stall noticed`
 entry to its file log, including session and turn identity and the observed event
 age. Continued silence produces no further entry; a new provider event starts a

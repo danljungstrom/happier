@@ -1,6 +1,14 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { once } from 'node:events';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { expect, it, vi } from 'vitest';
 
+import { createDeferred } from '@/testkit/async/deferred';
+import { createStreamedTranscriptWriter } from '@/api/session/streamedTranscriptWriter';
 import { createSessionTurnLifecycle } from '@/agent/runtime/session/turn/lifecycle';
 import type { TurnStallNotice } from '@/agent/runtime/session/turn/stallWatch';
 import { claudeRemoteAgentSdk } from './claudeRemoteAgentSdk';
@@ -76,65 +84,101 @@ it('observes a main permission request before its decision and excludes replayed
     }
 });
 
-it('observes live SDK events before buffering while replay, foreign sessions and sidechains cannot postpone a stall notice', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
+it('observes actual Agent SDK stdout while a tool-boundary transcript commit blocks iteration', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'claude-sdk-receipt-'));
+    const executable = join(dir, 'provider.js');
+    await writeFile(executable, `
+        const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+        require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+            const message = JSON.parse(line);
+            if (message.type === 'control_request') {
+                send({ type: 'control_response', response: { subtype: 'success', request_id: message.request_id,
+                    response: { commands: [], models: [], agents: [] } } });
+            } else if (message.type === 'fixture_emit') {
+                for (const frame of message.messages) send(frame);
+            } else if (message.type === 'user') {
+                send({ type: 'system', subtype: 'init', session_id: 'native-main' });
+                send({ type: 'stream_event', session_id: 'native-main', parent_tool_use_id: null,
+                    event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Before tool' } } });
+                send({ type: 'stream_event', session_id: 'native-main', parent_tool_use_id: null,
+                    event: { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} } } });
+            }
+        }).on('close', () => process.exit(0));
+    `);
     const notices: TurnStallNotice[] = [];
-    const lifecycle = createSessionTurnLifecycle({
-        sessionId: 'happier-session',
-        enqueueSessionTurn: async () => {},
-        turnStallWarnMs: 100,
-        onTurnStallNotice: (notice) => notices.push(notice),
-    });
-    await lifecycle.beginTurn({ provider: 'claude' });
-    // The external Agent SDK query is the boundary; raw event handling and the stopwatch stay real.
-    const query: Pick<Query, typeof Symbol.asyncIterator | 'close' | 'setPermissionMode' | 'setModel' | 'setMaxThinkingTokens' | 'supportedCommands' | 'supportedModels'> = {
-        async *[Symbol.asyncIterator]() {
-            yield { type: 'system', subtype: 'init', session_id: 'native-main' } as SDKMessage;
-            await vi.advanceTimersByTimeAsync(75);
-            yield { type: 'system', subtype: 'compact_boundary', session_id: 'native-compacted', compact_metadata: { trigger: 'auto', pre_tokens: 1 } } as SDKMessage;
-            await vi.advanceTimersByTimeAsync(99);
-            expect(notices).toEqual([]);
-            yield {
-                type: 'stream_event', session_id: 'native-compacted', parent_tool_use_id: null,
-                event: { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'tool-1', name: 'Write', input: {} } },
-            } as SDKMessage;
-            await vi.advanceTimersByTimeAsync(75);
-            yield {
-                type: 'stream_event', session_id: 'native-compacted', parent_tool_use_id: null,
-                event: { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"content":"still generating' } },
-            } as SDKMessage;
-            await vi.advanceTimersByTimeAsync(75);
-            yield { type: 'rate_limit_event', session_id: 'native-compacted', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' } } as SDKMessage;
-            await vi.advanceTimersByTimeAsync(99);
-            expect(notices).toEqual([]);
-            yield { type: 'rate_limit_event', session_id: 'native-compacted', isReplay: true } as unknown as SDKMessage;
-            yield { type: 'rate_limit_event', session_id: 'foreign-session' } as SDKMessage;
-            yield { type: 'rate_limit_event', session_id: 'native-compacted', parent_tool_use_id: 'child' } as unknown as SDKMessage;
-            yield { type: 'rate_limit_event', session_id: 'native-compacted', isSidechain: true } as unknown as SDKMessage;
-            await vi.advanceTimersByTimeAsync(1);
-            expect(notices).toMatchObject([{ lastEventAgeMs: 100 }]);
-            yield { type: 'result', subtype: 'success', session_id: 'native-compacted' } as SDKMessage;
-        },
-        close() {}, async setPermissionMode() {}, async setModel() {}, async setMaxThinkingTokens() {},
-        supportedCommands: async () => [], supportedModels: async () => [],
-    };
+    const lifecycle = createSessionTurnLifecycle({ sessionId: 'happier-session', enqueueSessionTurn: async () => {},
+        now: () => Date.now(), turnStallWarnMs: 100, onTurnStallNotice: notice => notices.push(notice) });
+    const commitEntered = createDeferred();
+    const releaseCommit = createDeferred();
+    const finishInput = createDeferred();
+    const childReady = createDeferred<ChildProcessWithoutNullStreams>();
+    const writer = createStreamedTranscriptWriter({ provider: 'claude', session: {
+        sendAgentMessage: () => {},
+        sendAgentMessageCommitted: async () => { commitEntered.resolve(); await releaseCommit.promise; },
+    }, initialCheckpointDelayMs: 10_000 });
+    let run: Promise<void> | undefined;
     let sent = false;
     try {
-        await claudeRemoteAgentSdk({
-            sessionId: null, transcriptPath: null, path: '/tmp', claudeExecutablePath: '/tmp/claude',
+        run = claudeRemoteAgentSdk({
+            sessionId: null, transcriptPath: null, path: dir, claudeExecutablePath: executable,
             canCallTool: async () => ({ behavior: 'allow', updatedInput: {} }), isAborted: () => false,
             nextMessage: async () => {
-                if (sent) return null;
+                if (sent) { await finishInput.promise; return null; }
                 sent = true;
                 return { message: 'hello', mode: makeMode({ claudeRemoteAgentSdkEnabled: true }) };
             },
-            onReady() {}, onSessionFound() {}, onMessage() {},
+            onReady: () => { finishInput.resolve(); }, onSessionFound() {}, onMessage() {}, streamedTranscriptWriter: writer,
             onProviderEvent: () => lifecycle.observeProviderTurnEvent(),
-            createQuery: () => query as Query,
+            spawnClaudeCodeProcess: options => {
+                const child = spawn(options.command, options.args, { cwd: options.cwd, env: options.env, stdio: 'pipe' });
+                childReady.resolve(child);
+                return child;
+            },
         });
-    } finally {
-        await lifecycle.completeTurn({ provider: 'claude' });
+        void run.catch(error => { childReady.reject(error); commitEntered.reject(error); });
+        const child = await childReady.promise;
+        const emit = async (messages: unknown[]) => {
+            const received = once(child.stdout, 'data');
+            child.stdin.write(JSON.stringify({ type: 'fixture_emit', messages }) + '\n');
+            await received;
+            await new Promise<void>(resolve => setImmediate(resolve));
+        };
+        await commitEntered.promise;
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+        vi.setSystemTime(0);
+        await lifecycle.beginTurn({ provider: 'claude' });
+        await vi.advanceTimersByTimeAsync(75);
+        await emit([
+            { type: 'system', subtype: 'compact_boundary', session_id: 'native-compacted', compact_metadata: { trigger: 'auto', pre_tokens: 1 } },
+        ]);
+        await vi.advanceTimersByTimeAsync(75);
+        await emit([
+            { type: 'rate_limit_event', session_id: 'native-compacted', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' } },
+        ]);
+        await vi.advanceTimersByTimeAsync(99);
+        expect(notices).toEqual([]);
+        await emit([
+            { type: 'rate_limit_event', session_id: 'foreign-session' },
+            { type: 'rate_limit_event', session_id: 'native-compacted', isReplay: true },
+            { type: 'rate_limit_event', session_id: 'native-compacted', parent_tool_use_id: 'child' },
+            { type: 'keep_alive' },
+        ]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(notices).toMatchObject([{ lastEventAgeMs: 100 }]);
+        lifecycle.dispose();
         vi.useRealTimers();
+        releaseCommit.resolve();
+        await emit([{ type: 'result', subtype: 'success', session_id: 'native-compacted', is_error: false }]);
+        await run;
+    } finally {
+        lifecycle.dispose();
+        vi.useRealTimers();
+        releaseCommit.resolve();
+        finishInput.resolve();
+        const child = await childReady.promise.catch(() => null);
+        child?.stdin.end();
+        await run?.catch(() => {});
+        writer.discard();
+        await rm(dir, { recursive: true, force: true });
     }
 });

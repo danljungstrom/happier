@@ -57,6 +57,10 @@ export function isLivePrimaryClaudeProviderMessage(
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || isReplaySdkMessage(value) || isClaudeSidechainRuntimeEvidence(value)) return false;
   const message = value as Record<string, unknown>;
+  // Agent SDK 0.2.123 consumes these transport frames before its public iterator.
+  if (message.type === 'control_request' || message.type === 'control_response'
+    || message.type === 'control_cancel_request' || message.type === 'keep_alive'
+    || message.type === 'transcript_mirror') return false;
   const sessionId = message.session_id ?? message.sessionId;
   // The query's native identity notifications establish ownership before later message admission.
   const establishesIdentity = message.type === 'system'

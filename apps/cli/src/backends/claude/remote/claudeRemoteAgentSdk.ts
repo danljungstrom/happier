@@ -52,6 +52,7 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { killProcessTree } from '@/agent/runtime/process/killProcessTree';
 import { createEventShapeLoggerForLog } from '@/diagnostics/eventShapeForLog';
 import { readTailTextFile } from '@/utils/fs/readTailTextFile';
+import { observeClaudeSdkProcess } from './agentSdk/observeClaudeSdkProcess';
 import { buildClaudeAgentSdkHooks } from './agentSdk/buildClaudeAgentSdkHooks';
 import {
     normalizeClaudeProviderTaskEvent,
@@ -893,6 +894,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
         return child as unknown as AgentSdkSpawnedProcess;
     };
 
+    let disposeProviderMessageObservation: (() => void) | undefined;
     const spawnBaseProcess = opts.spawnClaudeCodeProcess ?? defaultSpawnClaudeCodeProcess;
     queryOptions.spawnClaudeCodeProcess = (spawnOptions: AgentSdkSpawnOptions): AgentSdkSpawnedProcess => {
         const child = spawnBaseProcess(spawnOptions);
@@ -916,7 +918,20 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
             child.on('error', onError);
             if (child.exitCode !== null || ('signalCode' in child && child.signalCode != null)) onExit();
         });
-        return child;
+        if (!opts.onProviderEvent) return child;
+        const observation = observeClaudeSdkProcess(child, message => {
+            if (abortSignal.aborted || !isLivePrimaryClaudeProviderMessage(message, providerActivityLedger.isOwnedSessionId)) return;
+            // Receipt must seed the same additive lineage before later frames in a burst;
+            // UI/transcript session discovery remains with the ordered projection below.
+            const record = message as Record<string, unknown>;
+            if (record.type === 'system' && (record.subtype === 'init' || record.subtype === 'compact_boundary')) {
+                const sessionId = readNonBlankOpaqueIdentifier(record.session_id);
+                if (sessionId) providerActivityLedger.noteOwnedSessionId(sessionId);
+            }
+            opts.onProviderEvent?.();
+        });
+        disposeProviderMessageObservation = observation.dispose;
+        return observation.process;
     };
     let nextMessagePump: Promise<void> | null = null;
     let deferredUntilForegroundTurnEnds: ClaudeRemoteProviderAcceptedPrompt<EnhancedMode> | null = null;
@@ -1782,7 +1797,6 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
 
         let unpublishedLaunchEffort = resolvedUltracode ? 'xhigh' : queryOptions.effort;
         for await (const message of response as any) {
-            if (isLivePrimaryClaudeProviderMessage(message, providerActivityLedger.isOwnedSessionId)) opts.onProviderEvent?.();
             const observedModelId = isReplaySdkMessage(message) ? null : readClaudeMainChainAssistantModelId(message);
             if (observedModelId) {
                 const launchEffort = unpublishedLaunchEffort;
@@ -2398,6 +2412,7 @@ Current model: ${lastAppliedRuntimeSettings.model ?? 'provider default'}.${messa
         }
         throw e;
     } finally {
+        disposeProviderMessageObservation?.();
         await opts.setPermissionModeApplier?.(null);
         opts.onInFlightSteerAvailabilityChange?.(false);
         opts.setUserMessageSender?.(null);
