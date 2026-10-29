@@ -79,6 +79,7 @@ describe('rpcHandlers (session handoff async prepare)', () => {
       await mkdir(join(claudeHome, 'projects', 'existing-project'), { recursive: true });
       await mkdir(targetPath);
       await writeFile(transcriptPath, transcript);
+      const processEnv = { ...process.env, ...providerEnv };
       vi.resetModules();
       vi.doMock('@/configuration', async () => {
         const actual = await vi.importActual<typeof import('@/configuration')>('@/configuration');
@@ -109,7 +110,7 @@ describe('rpcHandlers (session handoff async prepare)', () => {
             }
             const environment = await resolveSpawnChildEnvironment({
               options: _options, existingSessionMetadata: metadata,
-              profileEnvironmentVariables: {}, daemonSpawnHooks: null, processEnv: { ...process.env, ...providerEnv },
+              profileEnvironmentVariables: {}, daemonSpawnHooks: null, processEnv,
               logDebug: () => {}, logInfo: () => {}, logWarn: () => {},
             });
             if (!environment.ok) {
@@ -124,7 +125,7 @@ describe('rpcHandlers (session handoff async prepare)', () => {
           resolveExistingStateEnvironment: async () => {
             environmentRequested = true;
             await environmentReady;
-            return process.env;
+            return processEnv;
           },
         });
         return manager;
