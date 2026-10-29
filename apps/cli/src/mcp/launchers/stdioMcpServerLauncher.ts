@@ -2,15 +2,16 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 
 import { z } from 'zod';
+import { lazySchema } from '@happier-dev/protocol';
 
 import { type CommandInvocation, resolveWindowsCommandInvocation } from '@happier-dev/cli-common/process';
 
-const StdioMcpServerLauncherConfigSchema = z.object({
+const StdioMcpServerLauncherConfigSchema = lazySchema(() => z.object({
   command: z.string().min(1),
   args: z.array(z.string()).optional().default([]),
   env: z.record(z.string(), z.string()).optional().default({}),
   cwd: z.string().min(1).optional(),
-});
+}));
 
 type StdioMcpServerLauncherConfig = z.infer<typeof StdioMcpServerLauncherConfigSchema>;
 

@@ -162,7 +162,6 @@ import {
     parseCodexConnectedServiceRuntimeAuthApplyRequest,
 } from '../connectedServices/codexConnectedServiceRuntimeAuthContract';
 import { resolveOpenAiCodexDaemonRefreshSelection } from '../connectedServices/resolveOpenAiCodexDaemonRefreshSelection';
-import { isCodexAppServerTerminalOwnedGroupRecoveryClassification } from './recovery/terminalGroupRecovery';
 import { resolveConfiguredCodexHome } from '../utils/resolveConfiguredCodexHome';
 import { readCodexProviderErrorRecord } from '../utils/readCodexProviderErrorRecord';
 import { computeConnectedServiceAccessTokenFingerprint } from '@/daemon/connectedServices/refresh/credentialFreshness/tokenFingerprint';
@@ -860,14 +859,6 @@ function isCodexAppServerAuthAccountChangedPayload(payload: CodexAppServerErrorP
     return hasAuthAccountChangedMessage && (!codexErrorInfo || codexErrorInfo === 'unauthorized');
 }
 
-function isCodexAppServerAuthAccountChangedError(error: unknown): boolean {
-    if (error instanceof CodexAppServerTurnFailure) {
-        return error.isAuthAccountChanged;
-    }
-    if (!(error instanceof Error)) return false;
-    return error.message.includes(CODEX_APP_SERVER_AUTH_ACCOUNT_CHANGED_MESSAGE);
-}
-
 function normalizeCodexErrorInfo(value: string | null): string | null {
     return value ? value.replace(/[_\-\s]/g, '').toLowerCase() : null;
 }
@@ -896,12 +887,6 @@ function isCodexAppServerTemporaryRecoverableTurnFailureError(error: unknown): b
     }
     if (!(error instanceof Error)) return false;
     return isCodexProviderCapacityFailure(error);
-}
-
-function shouldDeferCodexAppServerTurnFailureToPromptLoop(error: unknown): boolean {
-    return isCodexAppServerAuthAccountChangedError(error)
-        || isCodexAppServerContextWindowExhaustedError(error)
-        || isCodexAppServerTemporaryRecoverableTurnFailureError(error);
 }
 
 function normalizeCodexContextWindowRecoveryMode(value: unknown): CodexAppServerContextWindowRecoveryMode | null {
@@ -1876,8 +1861,10 @@ export function createCodexAppServerRuntime(params: Readonly<{
         return record && Object.prototype.hasOwnProperty.call(record, 'goal') ? record.goal : value;
     };
 
+    let nativeGoalStatus: string | null = null;
     const publishGoalWorkState = async (goal: unknown): Promise<void> => {
         const record = readRecord(readGoalFromResponse(goal));
+        nativeGoalStatus = typeof record?.status === 'string' ? record.status : null;
         if (!record) {
             await Promise.resolve(params.session.updateMetadata((metadata) =>
                 removeCodexGoalFromSessionWorkStateMetadata(metadata),
@@ -1890,6 +1877,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
     };
 
     const clearGoalWorkState = async (): Promise<void> => {
+        nativeGoalStatus = null;
         await Promise.resolve(params.session.updateMetadata((metadata) =>
             removeCodexGoalFromSessionWorkStateMetadata(metadata),
         )).catch(() => undefined);
@@ -3231,14 +3219,17 @@ export function createCodexAppServerRuntime(params: Readonly<{
     const surfaceCodexAppServerTurnFailure = async (
         failure: Error,
         providerTurnId: string | null,
+        deferPresentationToPromptLoop = false,
     ): Promise<Awaited<ReturnType<typeof surfacePrimarySessionRuntimeIssue>> | null> => {
-        try {
-            params.session.sendCodexMessage({
-                type: 'message',
-                message: formatCodexAppServerErrorForUi(failure),
-            });
-        } catch (error) {
-            logger.debug('[codex-app-server] Failed to publish provider failure message (non-fatal)', error);
+        if (!deferPresentationToPromptLoop) {
+            try {
+                params.session.sendCodexMessage({
+                    type: 'message',
+                    message: formatCodexAppServerErrorForUi(failure),
+                });
+            } catch (error) {
+                logger.debug('[codex-app-server] Failed to publish provider failure message (non-fatal)', error);
+            }
         }
         const issueInput = {
             provider: 'codex',
@@ -3246,7 +3237,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
             cause: 'status_error' as const,
             error: failure,
         };
-        const issue = params.session.sessionTurnLifecycle
+        const issue = params.session.sessionTurnLifecycle || deferPresentationToPromptLoop
             ? classifyPrimarySessionRuntimeIssue(issueInput)
             : await surfacePrimarySessionRuntimeIssue({
                 ...issueInput,
@@ -3255,7 +3246,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
                 logger.debug('[codex-app-server] Failed to surface primary runtime issue (non-fatal)', error);
                 return null;
             });
-        if (!params.session.sessionTurnLifecycle) {
+        if (!params.session.sessionTurnLifecycle && !deferPresentationToPromptLoop) {
             publishCodexTurnAbortedMessage();
         }
         return issue;
@@ -3287,12 +3278,16 @@ export function createCodexAppServerRuntime(params: Readonly<{
 
     const abortPendingTurnWithFailure = async (failure: Error): Promise<void> => {
         const providerTurnId = pendingTurn?.turnId ?? latestPendingTurnId;
+        // Keep temporary-capacity and account-change presentation with the prompt
+        // loop while this accepted terminal boundary remains their sole reporter.
+        const deferPresentationToPromptLoop = (failure instanceof CodexAppServerTurnFailure && failure.isAuthAccountChanged)
+            || isCodexAppServerTemporaryRecoverableTurnFailureError(failure);
         // Publish the provider-qualified issue before the boundary tracker performs its
         // generic terminal bookkeeping. Otherwise the generic fail wins the one terminal
         // lifecycle slot and permanently hides the exact auth/quota classification.
         let issue: Awaited<ReturnType<typeof surfacePrimarySessionRuntimeIssue>> | null = null;
         try {
-            issue = await surfaceCodexAppServerTurnFailure(failure, providerTurnId);
+            issue = await surfaceCodexAppServerTurnFailure(failure, providerTurnId, deferPresentationToPromptLoop);
         } finally {
             // Diagnostics and lifecycle persistence must never retain native turn
             // ownership after the provider process/turn has already terminated.
@@ -3303,7 +3298,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
                     onFailureTurn: ({ issue: acceptedIssue }) => {
                         issue = acceptedIssue;
                         attachCodexRuntimeAuthFailureIssue(failure, acceptedIssue);
-                        void requestConnectedServiceGroupRecoveryForTerminalFailure(
+                        void reportAcceptedConnectedServiceTurnFailure(
                             failure instanceof CodexAppServerTurnFailure ? failure.runtimeAuthClassification : null,
                         );
                     },
@@ -3313,25 +3308,24 @@ export function createCodexAppServerRuntime(params: Readonly<{
             } finally {
                 // Lifecycle-backed sessions must observe the exact classified failure
                 // before the legacy presentation marker can be interpreted as cancel.
-                if (params.session.sessionTurnLifecycle) {
+                if (params.session.sessionTurnLifecycle && !deferPresentationToPromptLoop) {
                     publishCodexTurnAbortedMessage();
                 }
             }
         }
         if (!params.session.sessionTurnLifecycle) {
-            void requestConnectedServiceGroupRecoveryForTerminalFailure(
+            void reportAcceptedConnectedServiceTurnFailure(
                 failure instanceof CodexAppServerTurnFailure ? failure.runtimeAuthClassification : null,
             );
         }
         await updateUsageLimitRecoveryFromSurfacedIssue(issue);
     };
 
-    const requestConnectedServiceGroupRecoveryForTerminalFailure = async (
+    const reportAcceptedConnectedServiceTurnFailure = async (
         classification: CodexConnectedServiceRuntimeFailureClassification | null,
     ): Promise<void> => {
         if (
             !classification
-            || !isCodexAppServerTerminalOwnedGroupRecoveryClassification(classification)
             || typeof params.onUsageLimitGroupRecovery !== 'function'
         ) {
             return;
@@ -3373,7 +3367,9 @@ export function createCodexAppServerRuntime(params: Readonly<{
                 notificationParams,
                 activeTurn?.connectedServiceRuntimeIdentityAtStart ?? null,
             );
-            if (shouldDeferCodexAppServerTurnFailureToPromptLoop(failure)) {
+            // Context-window compaction retries are still local to the prompt
+            // operation. All connected-service failures settle and report here.
+            if (isCodexAppServerContextWindowExhaustedError(failure)) {
                 await finishPendingTurn({
                     error: failure,
                     flushReason: 'abort',
@@ -4747,6 +4743,58 @@ export function createCodexAppServerRuntime(params: Readonly<{
         return { ok: true, reviewTurnId: reviewTurnResult ?? null };
     };
 
+    const setGoal = async (
+        objective: string | undefined,
+        options?: Readonly<{ status?: string; tokenBudget?: number | null }>,
+    ) => {
+        const activeThreadId = threadId;
+        if (!activeThreadId) {
+            throw new Error('Codex app-server setGoal requires an active thread');
+        }
+        const trimmedObjective = trimStringValue(objective);
+        const nativeStatus = normalizeNativeGoalSetStatus(options?.status);
+        if (nativeStatus === null) return invalidGoalStatus();
+        const hasStatus = nativeStatus !== undefined;
+        const hasTokenBudget = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'tokenBudget'));
+        if (!trimmedObjective && !hasStatus && !hasTokenBudget) {
+            throw new Error('Codex app-server setGoal requires a non-empty objective');
+        }
+        const client = await ensureClient();
+        const buildRequest = (fallbackObjective?: string | null): Record<string, unknown> => ({
+            threadId: activeThreadId,
+            ...(trimmedObjective ? { objective: trimmedObjective } : {}),
+            ...(!trimmedObjective && fallbackObjective ? { objective: fallbackObjective } : {}),
+            ...(hasStatus ? { status: nativeStatus } : {}),
+            ...(hasTokenBudget ? { tokenBudget: options?.tokenBudget ?? null } : {}),
+        });
+        try {
+            const response = await client.request('thread/goal/set', buildRequest());
+            await publishGoalWorkState(response);
+            return undefined;
+        } catch (error) {
+            if (!trimmedObjective
+                && (isCodexAppServerInvalidParamsError(error)
+                    || isCodexAppServerInvalidRequestForMethodError(error, 'thread/goal/set'))) {
+                const currentGoal = await client.request('thread/goal/get', { threadId: activeThreadId });
+                const fallbackObjective = trimStringValue(readRecord(readGoalFromResponse(currentGoal))?.objective);
+                if (!fallbackObjective) {
+                    return { ok: false as const, errorCode: 'goal_not_found' as const, error: 'goal_not_found' as const };
+                }
+                const response = await client.request('thread/goal/set', buildRequest(fallbackObjective));
+                await publishGoalWorkState(response);
+                return undefined;
+            }
+            if (isCodexAppServerGoalMethodUnavailableError(error, 'thread/goal/set')) {
+                logger.debug('[codex-app-server] Native goal set unsupported by app-server', {
+                    threadId: activeThreadId,
+                    error,
+                });
+                return unsupportedSessionRuntimeMethod(SESSION_RPC_METHODS.SESSION_GOAL_SET);
+            }
+            throw error;
+        }
+    };
+
     return {
         getSessionId: () => threadId,
         prepareThreadForCliAttach,
@@ -4807,6 +4855,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
             }
             threadId = null;
             nativeReadyThreadId = null;
+            nativeGoalStatus = null;
             currentModeId = null;
             currentCollaborationMode = null;
             currentModelId = null;
@@ -5075,6 +5124,19 @@ export function createCodexAppServerRuntime(params: Readonly<{
                     // hasActiveProviderTurn(), which includes the atomic handoff barrier.
                     await (pendingTurn ?? activeTurn).promise;
                     clearPendingProviderPrompt(pendingProviderPrompt);
+                    if (nativeGoalStatus === 'usageLimited' && threadId === activeThreadId) {
+                        try {
+                            // Successful continuation proves quota is usable again. Re-read
+                            // provider truth so an intervening Pause/Complete stays authoritative.
+                            await refreshGoalForThread(client, activeThreadId);
+                            if (nativeGoalStatus === 'usageLimited' && threadId === activeThreadId) {
+                                const result = await setGoal(undefined, { status: 'active' });
+                                if (result) logger.infoFile('[codex-app-server] usage_limit_goal_reactivation_unavailable', result);
+                            }
+                        } catch (error) {
+                            logger.infoFile('[codex-app-server] usage_limit_goal_reactivation_failed', error);
+                        }
+                    }
                     return;
                 } catch (error) {
                     const failure = error instanceof Error ? error : new Error(String(error));
@@ -5431,57 +5493,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
             }
             return undefined;
         },
-        setGoal: async (
-            objective: string | undefined,
-            options?: Readonly<{ status?: string; tokenBudget?: number | null }>,
-        ) => {
-            const activeThreadId = threadId;
-            if (!activeThreadId) {
-                throw new Error('Codex app-server setGoal requires an active thread');
-            }
-            const trimmedObjective = trimStringValue(objective);
-            const nativeStatus = normalizeNativeGoalSetStatus(options?.status);
-            if (nativeStatus === null) return invalidGoalStatus();
-            const hasStatus = nativeStatus !== undefined;
-            const hasTokenBudget = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'tokenBudget'));
-            if (!trimmedObjective && !hasStatus && !hasTokenBudget) {
-                throw new Error('Codex app-server setGoal requires a non-empty objective');
-            }
-            const client = await ensureClient();
-            const buildRequest = (fallbackObjective?: string | null): Record<string, unknown> => ({
-                threadId: activeThreadId,
-                ...(trimmedObjective ? { objective: trimmedObjective } : {}),
-                ...(!trimmedObjective && fallbackObjective ? { objective: fallbackObjective } : {}),
-                ...(hasStatus ? { status: nativeStatus } : {}),
-                ...(hasTokenBudget ? { tokenBudget: options?.tokenBudget ?? null } : {}),
-            });
-            try {
-                const response = await client.request('thread/goal/set', buildRequest());
-                await publishGoalWorkState(response);
-                return undefined;
-            } catch (error) {
-                if (!trimmedObjective
-                    && (isCodexAppServerInvalidParamsError(error)
-                        || isCodexAppServerInvalidRequestForMethodError(error, 'thread/goal/set'))) {
-                    const currentGoal = await client.request('thread/goal/get', { threadId: activeThreadId });
-                    const fallbackObjective = trimStringValue(readRecord(readGoalFromResponse(currentGoal))?.objective);
-                    if (!fallbackObjective) {
-                        return { ok: false, errorCode: 'goal_not_found', error: 'goal_not_found' };
-                    }
-                    const response = await client.request('thread/goal/set', buildRequest(fallbackObjective));
-                    await publishGoalWorkState(response);
-                    return undefined;
-                }
-                if (isCodexAppServerGoalMethodUnavailableError(error, 'thread/goal/set')) {
-                    logger.debug('[codex-app-server] Native goal set unsupported by app-server', {
-                        threadId: activeThreadId,
-                        error,
-                    });
-                    return unsupportedSessionRuntimeMethod(SESSION_RPC_METHODS.SESSION_GOAL_SET);
-                }
-                throw error;
-            }
-        },
+        setGoal,
         clearGoal: async () => {
             const activeThreadId = threadId;
             if (!activeThreadId) {

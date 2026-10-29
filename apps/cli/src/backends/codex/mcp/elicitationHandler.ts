@@ -13,15 +13,16 @@ import {
     type ReviewDecision,
 } from './elicitationTypes';
 import { getElicitationResponseStyle, type CodexVersionInfo, type ElicitationResponseStyle } from './version';
+import { lazySchema } from '@happier-dev/protocol';
 
 export type CodexMcpPermissionHandler = {
     handleToolCall: (toolCallId: string, toolName: string, input: unknown) => Promise<PermissionResult>;
 };
 
-const ElicitRequestSchemaWithExtras = RequestSchema.extend({
+const ElicitRequestSchemaWithExtras = lazySchema(() => RequestSchema.extend({
     method: z.literal('elicitation/create'),
     params: z.any()
-});
+}));
 
 function buildElicitationResponse(
     style: ElicitationResponseStyle,
