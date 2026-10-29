@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import * as fs from 'node:fs';
 import { ChildProcess, spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { Readable } from 'node:stream';
 import psList from 'ps-list';
 
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
@@ -557,8 +558,9 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
       const spawnProcess = options?.spawnClaudeCodeProcess;
       if (typeof spawnProcess !== 'function') throw new Error('Expected SDK owned-process boundary');
       const owned: unknown = spawnProcess({ command: process.execPath, args: [], env: process.env });
-      if (!(owned instanceof ChildProcess) || !owned.stdout) throw new Error('Expected real owned fixture child');
-      children.push(owned);
+      if (!owned || typeof owned !== 'object' || !('stdout' in owned) || !(owned.stdout instanceof Readable)) {
+        throw new Error('Expected SDK process transport stdout');
+      }
       const childReady = once(owned.stdout, 'data');
       return {
         async *[Symbol.asyncIterator]() {
@@ -579,7 +581,11 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     };
     mockClaudeRemoteAgentSdk.mockImplementation((opts: Parameters<typeof actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk>[0]) => (
       actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk({ ...opts, claudeExecutablePath: '/tmp/claude', createQuery,
-        spawnClaudeCodeProcess: () => spawn(process.execPath, ['-e', "console.log('ready'); setInterval(() => {}, 1000)"], { stdio: 'pipe' }),
+        spawnClaudeCodeProcess: () => {
+          const child = spawn(process.execPath, ['-e', "console.log('ready'); setInterval(() => {}, 1000)"], { stdio: 'pipe' });
+          children.push(child);
+          return child;
+        },
       })
     ));
     const mode = { permissionMode: 'default', claudeRemoteAgentSdkEnabled: true, claudeUnifiedTerminalEnabled: false } as const;
