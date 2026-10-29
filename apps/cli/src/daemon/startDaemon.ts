@@ -110,7 +110,7 @@ import { resolveDaemonServiceCliRuntimeFromEnv } from '@/daemon/service/cli';
 
 import { forceStopKnownDaemonPid, isDaemonRunningCurrentlyInstalledHappyVersion, resolveDaemonSpawnSessionByNonce, stopDaemon } from './controlClient';
 import { startDaemonControlServer } from './controlServer';
-import { resolveTrackedSessionCatalogAgentId } from './sessions/resolveTrackedSessionCatalogAgentId';
+import { readBuiltInCatalogAgentIdFromBackendTarget, resolveTrackedSessionCatalogAgentId } from './sessions/resolveTrackedSessionCatalogAgentId';
 import { extractResumeIdFromCommand } from './sessions/extractResumeIdFromCommand';
 import { activatePendingSessionRuntime } from './sessions/activatePendingInactiveSession';
 import {
@@ -536,13 +536,6 @@ function resolvePositiveIntEnv(raw: string | undefined, fallback: number, bounds
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(bounds.max, Math.max(bounds.min, parsed));
-}
-
-function readBuiltInCatalogAgentIdFromBackendTarget(target: BackendTargetRefV1 | undefined): CatalogAgentId | null {
-  if (target?.kind !== 'builtInAgent') return null;
-  return typeof target.agentId === 'string' && (CATALOG_AGENT_IDS as readonly string[]).includes(target.agentId)
-    ? (target.agentId as CatalogAgentId)
-    : null;
 }
 
 function resolveTrackedSessionNotificationTitle(tracked: TrackedSession | null | undefined): string | null {
