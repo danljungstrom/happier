@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDeferred, flushHookEffects, renderScreen } from '@/dev/testkit';
+import { createDeferred, createSessionFixture, flushHookEffects, renderScreen } from '@/dev/testkit';
+import { TokenStorage } from '@/auth/storage/tokenStorage';
+import * as runtimeFetch from '@/utils/system/runtimeFetch';
+import { setActiveServerId, upsertServerProfile } from '@/sync/domains/server/serverProfiles';
 import {
   installSessionActionsCommonModuleMocks,
   resetSessionActionsCommonModuleMockState,
@@ -10,13 +13,17 @@ import {
 import {
   SESSION_ACTION_ARCHIVE_ID,
   SESSION_ACTION_CLEAR_ATTENTION_STANDING_ID,
+  SESSION_ACTION_DELETE_ID,
   SESSION_ACTION_MARK_READ_ID,
   SESSION_ACTION_MARK_UNREAD_ID,
+  SESSION_ACTION_PIN_ID,
   SESSION_ACTION_RENAME_ID,
   SESSION_ACTION_RESUME_ID,
+  SESSION_ACTION_SET_APPEARANCE_COLOR_ID,
   SESSION_ACTION_SET_ATTENTION_STANDING_ID,
   SESSION_ACTION_STOP_ID,
   SESSION_ACTION_UNARCHIVE_ID,
+  SESSION_ACTION_UNPIN_ID,
 } from './sessionActionIds';
 
 
@@ -28,6 +35,9 @@ const resolveServerIdForSessionIdFromLocalCacheMock = vi.hoisted(() => vi.fn());
 const resolvePreferredServerIdForSessionIdMock = vi.hoisted(() => vi.fn());
 const usePreferredServerIdForSessionMock = vi.hoisted(() => vi.fn());
 const fireAndForgetMock = vi.hoisted(() => vi.fn());
+const navigationFocused = vi.hoisted(() => ({ current: true }));
+const routerBackMock = vi.hoisted(() => vi.fn());
+const routerReplaceMock = vi.hoisted(() => vi.fn());
 const realStorageRef = vi.hoisted(() => ({ current: null as typeof import('@/sync/domains/state/storageStore')['storage'] | null }));
 
 /**
@@ -94,6 +104,22 @@ const completeSessionForkNavigationMock = vi.hoisted(() =>
   vi.fn<(params: unknown) => Promise<void>>(async () => undefined),
 );
 const modalAlertMock = vi.hoisted(() => vi.fn());
+const pinRequestMock = vi.hoisted(() => vi.fn());
+const appearanceRequestMock = vi.hoisted(() => vi.fn(async () => ({ appearance: null })));
+const clipboardMock = vi.hoisted(() => vi.fn(async () => true));
+
+// Network and platform clipboard boundaries; pin orchestration and formatting stay real.
+vi.mock('@/sync/api/session/sessionOrganizationApi', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/sync/api/session/sessionOrganizationApi')>(),
+  setSessionPin: pinRequestMock,
+  setSessionAppearance: appearanceRequestMock,
+}));
+vi.mock('expo-clipboard', () => ({ setStringAsync: clipboardMock }));
+// The account encryption-mode HTTP adapter is a network boundary; a plain account writes plain display envelopes.
+vi.mock('@/sync/api/account/apiAccountEncryptionMode', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/sync/api/account/apiAccountEncryptionMode')>(),
+  fetchAccountEncryptionMode: async () => ({ mode: 'plain' }),
+}));
 const modalConfirmMock = vi.hoisted(() => vi.fn(async () => true));
 const modalPromptMock = vi.hoisted(() => vi.fn(async () => 'Renamed from header'));
 const dropdownRenderCount = vi.hoisted(() => ({
@@ -160,6 +186,18 @@ const storageState = vi.hoisted(() => ({
 }));
 
 installSessionActionsCommonModuleMocks({
+  router: async () => {
+    const { createExpoRouterMock } = await import('@/dev/testkit/mocks/router');
+    return createExpoRouterMock({
+      navigation: { isFocused: () => navigationFocused.current },
+      router: {
+        push: sessionActionsModuleState.routerPushSpy,
+        navigate: sessionActionsModuleState.routerNavigateSpy,
+        back: routerBackMock,
+        replace: routerReplaceMock,
+      },
+    }).module;
+  },
   reactNative: async () => {
     const { createReactNativeWebMock } = await import('@/dev/testkit/mocks/reactNative');
     return createReactNativeWebMock({
@@ -336,7 +374,8 @@ vi.mock('@/sync/ops/sessionMachineTarget', async (importOriginal) => {
   };
 });
 
-vi.mock('@/sync/ops', () => ({
+vi.mock('@/sync/ops', async () => ({
+  sessionDeleteWithServerScope: (await import('@/sync/ops/sessions')).sessionDeleteWithServerScope,
   sessionArchiveWithServerScope: (
     sessionId: string,
     opts?: Readonly<{ serverId?: string | null }>,
@@ -364,7 +403,8 @@ vi.mock('@/sync/ops', () => ({
 // The op boundary the header menu's attention-standing action resolves by default. Everything
 // between the menu item and this call — target build, availability, dropdown item, dispatch,
 // `executeSessionAction` — stays real.
-vi.mock('@/sync/ops/sessionOrganization', () => ({
+vi.mock('@/sync/ops/sessionOrganization', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/sync/ops/sessionOrganization')>(),
   sessionSetAttentionStandingWithServerScope: (
     sessionId: string,
     standing: boolean,
@@ -426,6 +466,9 @@ describe('SessionHeaderActionMenu handoff', () => {
     resolvePreferredServerIdForSessionIdMock.mockReset();
     usePreferredServerIdForSessionMock.mockReset();
     fireAndForgetMock.mockReset();
+    navigationFocused.current = true;
+    routerBackMock.mockReset();
+    routerReplaceMock.mockReset();
     createSessionActionDraftMock.mockReset();
     buildActionDraftInputMock.mockReset();
     teleportVoiceAgentToSessionRootMock.mockReset();
@@ -446,6 +489,9 @@ describe('SessionHeaderActionMenu handoff', () => {
     organizationProjectionState.current = buildOrganizationProjectionFixture({});
     completeSessionForkNavigationMock.mockReset();
     modalAlertMock.mockClear();
+    pinRequestMock.mockReset();
+    clipboardMock.mockReset();
+    clipboardMock.mockResolvedValue(true);
     modalConfirmMock.mockClear();
     modalPromptMock.mockClear();
     dropdownRenderCount.current = 0;
@@ -496,6 +542,188 @@ describe('SessionHeaderActionMenu handoff', () => {
     for (const binding of voiceSessionBindingStore.getState().list()) {
       voiceSessionBindingStore.getState().unbind(binding.conversationSessionId);
     }
+  });
+
+  it.each(['same-session', 'blurred', 'different-session', 'unmounted-content'] as const)('leaves a deleted session only while its route remains current (%s)', async (destination) => {
+    const profile = upsertServerProfile({ serverUrl: 'https://header-delete-navigation.example' });
+    setActiveServerId(profile.id);
+    resolveServerIdForSessionIdFromLocalCacheMock.mockReturnValue(profile.id);
+    const session = createSessionFixture({ id: 'header-delete-navigation', serverId: profile.id, active: false, presence: 0 });
+    realStorage.setState({ sessions: { [session.id]: session }, sessionListRenderables: {} });
+    storageState.current.sessions = { [session.id]: session };
+    modalConfirmMock.mockResolvedValue(true);
+    const response = createDeferred<Response>();
+    const credentialsSpy = vi.spyOn(TokenStorage, 'getCredentialsForServerUrl')
+      .mockResolvedValue({ token: 'header.eyJzdWIiOiJtZSJ9.signature' });
+    // HTTP and router are system boundaries; action eligibility, confirmation and deletion stay real.
+    const request = vi.spyOn(runtimeFetch, 'runtimeFetch').mockImplementation(async (_url, init) =>
+      init?.method === 'DELETE' ? response.promise : Response.json({ success: true }));
+    let pending: Promise<void> | undefined;
+    try {
+      const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+      const dropdown = screen.findByType('DropdownMenu' as React.ElementType);
+      expect(dropdown.props.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: SESSION_ACTION_DELETE_ID })]));
+      await act(async () => { dropdown.props.onSelect(SESSION_ACTION_DELETE_ID); });
+      pending = findFireAndForgetByTag('SessionHeaderActionMenu.execute.sessionDelete');
+      await vi.waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true));
+      if (destination === 'blurred') navigationFocused.current = false;
+      if (destination === 'different-session') {
+        const nextSession = createSessionFixture({ id: 'header-next-session', serverId: profile.id });
+        await screen.update(<SessionHeaderActionMenu sessionId={nextSession.id} session={nextSession} />);
+      }
+      // SessionView removes its header content on deletion while the originating route stays focused.
+      if (destination === 'unmounted-content') await screen.unmount();
+      await act(async () => {
+        response.resolve(Response.json({ success: true }));
+        await pending;
+      });
+      expect(realStorage.getState().sessions[session.id]).toBeUndefined();
+      expect(routerBackMock).toHaveBeenCalledTimes(destination === 'same-session' || destination === 'unmounted-content' ? 1 : 0);
+      expect(routerReplaceMock).not.toHaveBeenCalled();
+    } finally {
+      response.resolve(Response.json({ success: true }));
+      await pending;
+      credentialsSpy.mockRestore();
+      request.mockRestore();
+    }
+  });
+
+  it.each([false, true])('offers the current pin direction and updates the session organization (pinned=%s)', async (pinned) => {
+    const profile = upsertServerProfile({
+      serverUrl: 'https://header-pins.example',
+      name: 'Header pin test',
+    });
+    resolveServerIdForSessionIdFromLocalCacheMock.mockReturnValue(profile.id);
+    const session = createSessionFixture({ id: 'header-pin', active: false });
+    organizationProjectionState.current = {
+      ...buildOrganizationProjectionFixture({}),
+      pinnedSessionIds: pinned ? [session.id] : [],
+    };
+    const pin = { sessionId: session.id, sortKey: null, pinnedAt: 99 };
+    realStorage.getState().setSessionPinOptimistic(profile.id, session.id, pinned ? pin : null);
+    pinRequestMock.mockResolvedValue({ pin: pinned ? null : pin });
+    const credentialsSpy = vi.spyOn(TokenStorage, 'getCredentialsForServerUrl')
+      .mockResolvedValue({ token: 'header-token', secret: 'header-secret' });
+    try {
+      const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+      const dropdown = screen.findByType('DropdownMenu' as React.ElementType);
+      const actionId = pinned ? SESSION_ACTION_UNPIN_ID : SESSION_ACTION_PIN_ID;
+      expect(dropdown.props.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: actionId })]));
+      expect(dropdown.props.items.some((item: { id: string }) => item.id === (pinned ? SESSION_ACTION_PIN_ID : SESSION_ACTION_UNPIN_ID))).toBe(false);
+      await act(async () => {
+        dropdown.props.onSelect(actionId);
+        await findFireAndForgetByTag('SessionHeaderActionMenu.execute.sessionPin');
+      });
+      expect(pinRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+        serverUrl: profile.serverUrl,
+        sessionId: session.id,
+        request: { pinned: !pinned, sortKey: undefined },
+      }));
+      expect(realStorage.getState().sessionOrganizationPinsBySessionKey[`${profile.id}:${session.id}`])
+        .toEqual(pinned ? undefined : pin);
+    } finally {
+      credentialsSpy.mockRestore();
+    }
+  });
+
+  it('offers Set color only where the server stores session colours, and writes the chosen colour for this session', async () => {
+    const profile = upsertServerProfile({ serverUrl: 'https://header-colours.example', name: 'Header colour test' });
+    resolveServerIdForSessionIdFromLocalCacheMock.mockReturnValue(profile.id);
+    resolvePreferredServerIdForSessionIdMock.mockReturnValue(profile.id);
+    usePreferredServerIdForSessionMock.mockReturnValue(profile.id);
+    const session = createSessionFixture({ id: 'header-colour', active: false });
+    const credentialsSpy = vi.spyOn(TokenStorage, 'getCredentialsForServerUrl')
+      .mockResolvedValue({ token: 'header-token', secret: 'header-secret' });
+    const openMenu = async (screen: Awaited<ReturnType<typeof renderScreen>>) => {
+      await act(async () => {
+        screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true);
+      });
+      return screen.findByType('DropdownMenu' as React.ElementType);
+    };
+    try {
+      const unsupported = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+      expect(((await openMenu(unsupported)).props.items as Array<{ id: string }>).map((item) => item.id))
+        .not.toContain(SESSION_ACTION_SET_APPEARANCE_COLOR_ID);
+      await unsupported.unmount();
+
+      realStorage.setState({ sessionOrganizationSessionAppearancesSupportedByServerId: { [profile.id]: true } } as any);
+      const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+      const dropdown = await openMenu(screen);
+      const colorItem = (dropdown.props.items as any[]).find((item) => item.id === SESSION_ACTION_SET_APPEARANCE_COLOR_ID);
+      expect(colorItem?.submenu?.items.some((item: { swatch?: unknown }) => item.swatch)).toBe(true);
+      const green = (colorItem.submenu.items as Array<{ id: string }>).find((item) => item.id.endsWith(':accent:green'))!;
+      await act(async () => {
+        dropdown.props.onSelect(green.id);
+        await findFireAndForgetByTag('SessionHeaderActionMenu.execute.sessionAppearance');
+      });
+      expect(appearanceRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+        serverUrl: profile.serverUrl,
+        sessionId: session.id,
+      }));
+    } finally {
+      credentialsSpy.mockRestore();
+    }
+  });
+
+  it('copies session information from the header with developer mode disabled', async () => {
+    const session = createSessionFixture({
+      id: 'header-copy',
+      metadata: { path: '/workspace', host: 'test-host', flavor: 'claude', claudeSessionId: 'vendor-session', sessionLogPath: '/tmp/session.log' },
+    });
+    const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
+    storageState.current.sessions = {
+      [session.id]: { ...session, metadata: { ...session.metadata, claudeSessionId: 'current-vendor-session' } },
+    };
+    const dropdown = screen.findByType('DropdownMenu' as React.ElementType);
+    expect(dropdown.props.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'session.copy' }),
+    ]));
+    expect(dropdown.props.items.at(-1)?.id).toBe('session.copy');
+    await act(async () => {
+      dropdown.props.onSelect('session.copyDebugInformation');
+      await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
+    });
+    expect(clipboardMock).toHaveBeenCalledWith([
+      'Happier session ID: header-copy',
+      'agentInput.agent.claude session ID: current-vendor-session',
+      'Happier logs: /tmp/session.log',
+    ].join('\n'));
+    for (const [itemId, expected] of [
+      ['session.copySessionId', session.id],
+      ['session.copyProviderSessionId', 'current-vendor-session'],
+    ]) {
+      await act(async () => { dropdown.props.onOpenChange(true); });
+      await act(async () => {
+        dropdown.props.onSelect(itemId);
+        await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
+      });
+      expect(clipboardMock).toHaveBeenLastCalledWith(expected);
+    }
+
+  });
+
+  it('omits the provider ID choice when no provider session ID is available', async () => {
+    const session = createSessionFixture({ id: 'header-no-provider-id' });
+    const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
+    const copyMenu = screen.findByType('DropdownMenu' as React.ElementType).props.items
+      .find((item: { id: string }) => item.id === 'session.copy');
+    expect(copyMenu.submenu.items.map((item: { id: string }) => item.id)).toEqual([
+      'session.copyDebugInformation', 'session.copySessionId',
+    ]);
+  });
+
+  it.each(['session.copyDebugInformation', 'session.copySessionId', 'session.copyProviderSessionId'])('reports clipboard refusal for %s from the header', async (actionId) => {
+    clipboardMock.mockResolvedValue(false);
+    const session = createSessionFixture({ id: 'header-copy-failure', metadata: { path: '/workspace', host: 'host', flavor: 'claude', claudeSessionId: 'vendor-session' } });
+    const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
+    await act(async () => {
+      screen.findByType('DropdownMenu' as React.ElementType).props.onSelect(actionId);
+      await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
+    });
+    expect(modalAlertMock).toHaveBeenCalledWith('common.error', 'sessionInfo.failedToCopyMetadata');
   });
 
   it('delivers an inactive session header resume request to its session listener and awaits completion', async () => {
@@ -638,9 +866,8 @@ describe('SessionHeaderActionMenu handoff', () => {
     helperParams.navigate('sess_next');
     // The canonical opener now carries the resolved server scope in the href; asserting the bare
     // path would pin the pre-migration shape.
-    expect(String(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[0])).toContain('/session/sess_next');
-    expect(String(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[0])).toContain('serverId=');
-    expect(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[1]?.dangerouslySingular?.()).toBe('session');
+    expect(String(sessionActionsModuleState.routerPushSpy.mock.calls[0]?.[0])).toContain('/session/sess_next');
+    expect(String(sessionActionsModuleState.routerPushSpy.mock.calls[0]?.[0])).toContain('serverId=');
   });
 
   it('keeps the closed trigger stable when only the session sequence changes', async () => {

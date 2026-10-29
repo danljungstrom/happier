@@ -70,6 +70,14 @@ export async function createClaudeRemoteIdleProcessFixture(sessionId: string, op
     return { provider: value.provider, mcp: value.mcp };
   };
 
+  const stop = async () => {
+    const processes = await readProcesses().catch(() => null);
+    if (processes) {
+      await killProcessTree({ pid: processes.provider });
+      await killProcessTree({ pid: processes.mcp });
+    }
+  };
+
   return {
     directory,
     executablePath,
@@ -98,12 +106,9 @@ export async function createClaudeRemoteIdleProcessFixture(sessionId: string, op
         throw new Error('Idle teardown left a fixture-owned provider or MCP process alive');
       }
     },
+    stop,
     async cleanup() {
-      const processes = await readProcesses().catch(() => null);
-      if (processes) {
-        await killProcessTree({ pid: processes.provider });
-        await killProcessTree({ pid: processes.mcp });
-      }
+      await stop();
       await rm(directory, { recursive: true, force: true });
     },
   };

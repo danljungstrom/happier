@@ -443,7 +443,8 @@ export const fr: TranslationStructure = {
         commands: {
             composerAbortConfirm: 'Confirmer l’interruption',
             composerFocus: 'Placer le focus sur le composer',
-            composerSendImmediate: 'Envoyer immédiatement',
+            composerSendImmediate: 'Envoi alternatif (file / orienter)',
+            composerSendInterrupt: 'Interrompre et envoyer',
             composerSendPending: 'Envoyer dans la file d’attente',
             commandPaletteOpen: 'Ouvrir la palette de commandes',
             modeCycle: 'Changer de mode',
@@ -479,6 +480,10 @@ export const fr: TranslationStructure = {
     },
 
     transcript: {
+        quote: {
+            action: 'Citer',
+            actionA11y: 'Citer le texte sélectionné dans votre message',
+        },
         selection: {
             enterA11y: 'Activer le mode sélection',
             exitA11y: 'Quitter le mode sélection',
@@ -1010,6 +1015,15 @@ export const fr: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Enregistrer les diagnostics",
+        diagnosticsSaveFailed: "Les diagnostics n’ont pas pu être enregistrés. Les détails de l’erreur restent disponibles. Réessayez ou copiez-les.",
+        copyFailed: "Les détails du plantage n’ont pas pu être copiés. Réessayez.",
+        discardFailed: "Le plantage enregistré n’a pas pu être supprimé. Réessayez.",
+        restartWithoutReport: "Redémarrer sans enregistrer",
+        reportSaveFailed: "Les détails du plantage n’ont pas pu être enregistrés. Copiez-les avant de redémarrer ou réessayez le signalement.",
+        savedReportNotice: "Le plantage enregistré figure ci-dessous. Vérifiez et modifiez les détails avant l’envoi. Ils restent sur cet appareil jusqu’à l’envoi ou la suppression.",
+        discardSavedReport: "Supprimer le plantage enregistré",
+        stackTruncated: "Pile abrégée pour ce champ. Le plantage complet reste enregistré sur cet appareil.",
         title: 'Quelque chose s’est mal passé',
         subtitle: 'Happier a rencontré une erreur inattendue. Tu peux redémarrer l’UI de l’app ou copier les détails pour le support.',
         detailsTitle: 'Détails de l’erreur',
@@ -3255,6 +3269,10 @@ export const fr: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Utiliser la barre de titre Windows',
+        nativeTitleBarSubtitle: 'Afficher le cadre et les commandes de fenêtre standard de Windows.',
+        nativeTitleBarChangeFailed: 'Impossible de modifier la barre de titre. Réessayez.',
+        nativeTitleBarPersistenceFailed: 'Impossible de charger ou d’enregistrer la préférence de barre de titre. Modifiez-la à nouveau pour réessayer.',
         title: 'Bureau',
         footer: 'Contrôle le comportement de Happier sur cet ordinateur.',
         backgroundServiceTitle: 'Rester joignable en arrière-plan',
@@ -3457,6 +3475,17 @@ export const fr: TranslationStructure = {
             openSettingsFailed: 'Impossible d’ouvrir les réglages système.',
         },
         pushTroubleshooting: {
+            remoteTest: {
+                title: "Envoyer un test distant",
+                subtitle: "Envoyez une véritable notification push à ce téléphone via une machine connectée à ce Home.",
+                notRegistered: "Enregistrez le jeton de ce téléphone, puis réessayez.",
+                noMachine: "Connectez une machine à ce Home pour envoyer un test distant.",
+                accepted: "Le service push a accepté le test. Cela ne confirme pas sa réception ou son affichage sur le téléphone. Vérifiez vos notifications.",
+                rejected: "Le service push n’a pas confirmé l’acceptation. Vérifiez vos notifications et l’enregistrement avant de réessayer.",
+                invalidCredentials: "Le fournisseur push a rejeté les identifiants de cette app. Vérifiez la configuration APNs ou FCM.",
+                unsupported: "Mettez à jour la CLI Happier de la machine connectée pour envoyer des tests distants.",
+                unconfirmed: "Le résultat n’a pas pu être confirmé. La demande peut encore aboutir ; vérifiez vos notifications avant de réessayer.",
+            },
             status: {
                 title: 'Statut',
                 footer: 'Vérifie le réglage du compte, la permission de l’OS et l’état d’enregistrement sur le serveur.',
@@ -3592,7 +3621,12 @@ export const fr: TranslationStructure = {
     },
 
     notifications: {
+        permissionActionNeedsReview: "La réponse envoyée depuis la notification n’a pas pu être confirmée. Vérifiez les demandes en attente avant de répondre à nouveau.",
+        permissionActionReviewUnavailable: "Impossible d’ouvrir le Home et le compte de cette réponse. Vérifiez votre connexion et votre identification dans les réglages, puis les demandes en attente.",
         actions: {
+            reviewPendingRequests: "Vérifier les demandes en attente",
+            questionReply: "Répondre",
+            questionPlaceholder: "Votre réponse",
             allow: 'Autoriser',
             deny: 'Refuser',
             answer: 'Répondre',
@@ -4105,6 +4139,16 @@ export const fr: TranslationStructure = {
 	                    },
 	                },
 	                fields: {
+	                    codexReasoningSummaries: {
+	                        title: "Résumés du raisonnement",
+	                        footer: "Contrôle si Codex génère des résumés, indépendamment de l’affichage dans la conversation. S’applique au démarrage ou à la reprise d’une session. La disponibilité dépend du modèle.",
+	                        generation: "Génération",
+	                        options: {
+	                            default: "Utilise ta configuration Codex ou le choix par défaut du modèle.",
+	                            enabled: "Demande des résumés si le modèle les prend en charge.",
+	                            disabled: "Ne génère pas de résumés du raisonnement.",
+	                        },
+	                    },
 	                    codexBackendMode: {
 	                        title: 'Mode de routage Codex',
 	                        subtitle: 'Choisis App Server, ACP ou MCP.',
@@ -4140,6 +4184,8 @@ export const fr: TranslationStructure = {
 
     settingsAppearance: {
       tabBarAppearance: {
+        sideRailTitle: "Onglets dans la barre latérale",
+        sideRailSubtitle: "Désactivez cette option pour utiliser la barre d’onglets de Happier et ses gestes de balayage.",
         title: 'Barre d’onglets',
         footer: 'Personnalise la barre d’onglets du bas.',
         showLabels: 'Afficher les libellés d’onglets',
@@ -6188,6 +6234,17 @@ export const fr: TranslationStructure = {
             presetName: 'Nom du préréglage', movePresetUp: 'Déplacer vers le haut', movePresetDown: 'Déplacer vers le bas',
             noPresets: 'Aucun préréglage enregistré', noPresetsMessage: 'Enregistre-en un lors de ton prochain rappel personnalisé.',
         },
+        appearance: {
+            setColor: 'Définir la couleur',
+            customColor: 'Couleur personnalisée…',
+            customColorTitle: 'Couleur personnalisée',
+            customColorMessage: 'Choisissez une teinte ou saisissez une valeur hexadécimale.',
+            invalidColor: 'Utilisez une valeur hexadécimale comme #3A7BD5.',
+            removeColor: 'Retirer la couleur',
+            inheritedFromProject: 'Du projet',
+            customColorLabel: ({ hex }: { hex: string }) => `Couleur personnalisée ${hex}`,
+            colors: { blue: 'Bleu', green: 'Vert', orange: 'Orange', yellow: 'Jaune', red: 'Rouge', indigo: 'Indigo', purple: 'Violet' },
+        },
         workingSectionTitle: 'En cours',
         hideInactiveSessions: 'Masquer les sessions inactives',
         showInactiveSessions: 'Afficher les sessions inactives',
@@ -6343,6 +6400,9 @@ export const fr: TranslationStructure = {
         tmuxFallback: 'Fallback tmux',
         copyMetadata: 'Copier les métadonnées',
         copyDebugInformation: 'Copier les informations',
+        sessionInformation: "Informations de la session",
+        happierSessionId: "ID de session Happier",
+        providerSessionId: ({ provider }: { provider: string }) => `ID de session ${provider}`,
         debugInformationCopyLabel: 'Informations',
         providerSessionLogs: ({ provider }: { provider: string }) => `${provider} logs de session`,
         agentState: 'État de l’agent',
@@ -6355,6 +6415,9 @@ export const fr: TranslationStructure = {
         thinking: 'Réflexion',
         thinkingSince: 'Réflexion depuis',
         thinkingLevel: 'Niveau de réflexion',
+        peerReportFrom: ({ name }: { name: string }) => `Rapport de ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Message de ${name}`,
+        peerUnnamedSender: 'cet autre agent',
         cliVersion: 'Version du CLI',
         cliVersionOutdated: 'Mise à jour du CLI requise',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
@@ -6364,6 +6427,8 @@ export const fr: TranslationStructure = {
         deleteSessionSubtitle: 'Supprimer définitivement cette session',
         deleteSessionConfirm: 'Supprimer définitivement la session ?',
         deleteSessionWarning: 'Cette action est irréversible. Tous les messages et toutes les données associés à cette session seront définitivement supprimés.',
+        stopAndDeleteSession: "Arrêter et supprimer",
+        stopAndDeleteSessionWarning: "Cette action arrêtera la session et supprimera définitivement tous ses messages et toutes ses données. Cette action est irréversible.",
         failedToDeleteSession: 'Échec de la suppression de la session',
         sessionDeleted: 'Session supprimée',
         renameSession: 'Renommer la session',
@@ -6435,6 +6500,11 @@ export const fr: TranslationStructure = {
     },
 
     agentInput: {
+        sendOptions: {
+            title: "Options d’envoi",
+            queue: "Mettre en attente",
+            hint: "Maintiens pour choisir comment envoyer",
+        },
         chipPicker: {
             selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}. Sélectionné.`,
         },
@@ -9375,7 +9445,7 @@ settingsSession: {
             offline: 'Certaines machines sont hors ligne',
             checkedAt: ({ time }: { time: string }) => `Dernière vérification : ${time}`,
             upToDateDescription: 'Happier, sa ligne de commande et tes agents sont à jour.',
-            unknownDescription: 'Tout ce qui a pu être vérifié est à jour. Le reste sera vérifié dès qu’il sera joignable.',
+            unknownDescription: "Certaines informations de mise à jour sont indisponibles ou en cache. Consultez les lignes concernées.",
             offlineDescription: 'Tout ce qui est joignable est à jour. Les machines hors ligne seront vérifiées à leur retour.',
         },
         settingsSubtitle: {
@@ -9421,6 +9491,9 @@ settingsSession: {
             appCheckFailed: 'Impossible de vérifier s’il existe une version plus récente.',
             appDownloadFailed: 'Le téléchargement n’a pas abouti.',
             appInstallFailed: 'La mise à jour n’a pas pu être installée.',
+            cachedRelease: "Informations de version en cache ; non actualisées ici",
+            cachedReleaseChannel: ({ channel }: { channel: string }) => `Informations de version ${channel} en cache ; non actualisées ici`,
+            manualUpdateInterruptsSessions: "Mettez à jour sur cette machine. Les services peuvent s’arrêter et les sessions en cours peuvent se terminer.",
             latestUnknown: 'Impossible de vérifier s’il existe une version plus récente',
             rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} n’a pas démarré sur cette machine, elle reste donc en version ${kept}.`,
             installedByYou: 'Installé par toi',
@@ -9672,6 +9745,7 @@ settingsSession: {
         failedToConnectTerminal: 'Échec de la connexion du terminal',
         cameraPermissionsRequiredToConnectTerminal: 'L’accès à la caméra est nécessaire pour connecter le terminal',
         failedToLinkDevice: 'Échec de la liaison de l’appareil',
+        deviceLinkRequestNotFound: "Aucune demande d’association en attente n’a été trouvée sur ce relais. Vérifiez que les deux appareils utilisent le même relais, puis générez un nouveau code QR.",
         cameraPermissionsRequiredToScanQr: 'L’accès à la caméra est nécessaire pour scanner les QR codes',
         qrScannerUnavailable: 'Impossible d’ouvrir le scanner de QR code. Réessaie ou saisis l’URL manuellement.'
     },

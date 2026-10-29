@@ -22,7 +22,7 @@ vi.mock('@/components/ui/forms/dropdown/DropdownMenu', () => ({
     DropdownMenu: (props: any) => React.createElement('DropdownMenu', props),
 }));
 
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => undefined) }));
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => true) }));
 
 vi.mock('@/utils/sessions/sessionUtils', () => ({
     getSessionName: () => 'Session',
@@ -86,7 +86,8 @@ function hasCopyDebugInformationMenuItem(items: unknown): boolean {
     if (!Array.isArray(items)) return false;
     return items.some((item: unknown) => {
         if (!item || typeof item !== 'object') return false;
-        return (item as { id?: unknown }).id === 'session.copyDebugInformation';
+        const entry = item as { id?: unknown; submenu?: { items?: unknown } };
+        return entry.id === 'session.copyDebugInformation' || hasCopyDebugInformationMenuItem(entry.submenu?.items);
     });
 }
 
@@ -324,7 +325,10 @@ describe('SessionItem context menu press suppression', () => {
         expect(hasRenameMenuItem(menus[0].props.items)).toBe(true);
     });
 
-    it('shows the copy information context menu item in developer-mode builds', async () => {
+    it.each(['ios', 'android', 'web'] as const)('copies session information outside developer mode on %s', async (platform) => {
+        platformOs = platform;
+        localDevModeEnabled = false;
+        const Clipboard = await import('expo-clipboard');
         const session = createSessionFixture({
             id: 'sess_debug_menu',
             active: false,
@@ -354,9 +358,30 @@ describe('SessionItem context menu press suppression', () => {
             />,
         );
 
-        let menus = screen.tree.root.findAllByType('DropdownMenu' as React.ElementType);
+        if (platform === 'web') {
+            const hoverContainer = screen.root.findAll((node) => typeof node.props.onPointerEnter === 'function')[0];
+            await act(async () => hoverContainer?.props.onPointerEnter());
+        }
+        const menus = screen.tree.root.findAllByType('DropdownMenu' as React.ElementType);
         expect(menus).toHaveLength(1);
         expect(hasCopyDebugInformationMenuItem(menus[0].props.items)).toBe(true);
+        await act(async () => {
+            await menus[0].props.onSelect('session.copyDebugInformation');
+        });
+        expect(Clipboard.setStringAsync).toHaveBeenCalledWith(expect.stringContaining('Happier session ID: sess_debug_menu'));
+        const copyMenu = menus[0].props.items.find((item: { id: string }) => item.id === 'session.copy');
+        expect(menus[0].props.items.at(-1)?.id).toBe('session.copy');
+        expect(copyMenu?.submenu?.items.map((item: { id: string }) => item.id)).toEqual([
+            'session.copyDebugInformation', 'session.copySessionId', 'session.copyProviderSessionId',
+        ]);
+        for (const [itemId, expected] of [
+            ['session.copySessionId', session.id],
+            ['session.copyProviderSessionId', 'claude-session-1'],
+        ]) {
+            await act(async () => { await menus[0].props.onSelect(itemId); });
+            expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(expected);
+        }
+
     });
 
     it('copies debug information from the full cached session when row metadata is list-projected', async () => {
@@ -405,6 +430,9 @@ describe('SessionItem context menu press suppression', () => {
         await act(async () => {
             await contextMenu.props.onSelect('session.copyDebugInformation');
         });
+
+        await act(async () => { await contextMenu.props.onSelect('session.copyProviderSessionId'); });
+        expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith('claude-session-1');
 
         expect(Clipboard.setStringAsync).toHaveBeenCalledWith([
             'Happier session ID: sess_debug_full',

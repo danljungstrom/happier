@@ -1916,6 +1916,7 @@ export async function handleUpdateContainer(params: {
                 notifyActivityAgentRequest({
                     sessionId: updateData.body.id,
                     requestId: nextRequest.requestId,
+                    occurrenceId: nextRequest.occurrenceId,
                     requestKind: nextRequest.requestKind,
                     toolName: nextRequest.toolName,
                     toolArgs: nextRequest.toolArgs,

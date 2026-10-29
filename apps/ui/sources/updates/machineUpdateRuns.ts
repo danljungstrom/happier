@@ -103,6 +103,33 @@ export function useUpdateBatch(
     return { batch, updateAll, stopAfterCurrent };
 }
 
+/** Explicit checks outlive the view that started them, just like Update All. */
+const checksByServer = new Map<string, Promise<void>>();
+const checkListeners = new Set<() => void>();
+
+export function useUpdateCheck(serverId: string, check: () => Promise<void>): Readonly<{
+    checking: boolean;
+    checkNow: () => Promise<void>;
+}> {
+    const read = React.useCallback(() => checksByServer.has(serverId), [serverId]);
+    const checking = React.useSyncExternalStore(React.useCallback((listener: () => void) => {
+        checkListeners.add(listener);
+        return () => { checkListeners.delete(listener); };
+    }, []), read, read);
+    const checkNow = React.useCallback(() => {
+        const current = checksByServer.get(serverId);
+        if (current) return current;
+        const pending = Promise.resolve().then(check).finally(() => {
+            checksByServer.delete(serverId);
+            for (const listener of checkListeners) listener();
+        });
+        checksByServer.set(serverId, pending);
+        for (const listener of checkListeners) listener();
+        return pending;
+    }, [check, serverId]);
+    return { checking, checkNow };
+}
+
 export {
     markUpdateCompletionsSeen,
     readUnseenUpdateCompletions,
@@ -308,8 +335,8 @@ async function runRemoteCliUpdate(scope: ServerAccountScope, itemId: string, mac
  * latest version) through the capability-cache owner, so a finished update resolves its row and
  * the pill count from the machine's own answer.
  */
-export function refreshMachineUpdateFacts(serverId: string, machineId: string): void {
-    void prefetchMachineCapabilities({ machineId, serverId, request: { ...buildMachineUpdateFactsRequest(), bypassCache: true } });
+export function refreshMachineUpdateFacts(serverId: string, machineId: string): Promise<void> {
+    return prefetchMachineCapabilities({ machineId, serverId, request: { ...buildMachineUpdateFactsRequest(), bypassCache: true } });
 }
 
 /**
@@ -329,6 +356,7 @@ export async function runMachineItemUpdate(
     setRecord(serverId, item.id, { status: 'running' });
 
     const subject = item.subject;
+    let completed: 'finished' | 'alreadyCurrent' | null = null;
     try {
         if (subject.kind === 'happier-cli') {
             await runRemoteCliUpdate(scope, item.id, machineId, context.lastUpdateSignature ?? '');
@@ -372,14 +400,17 @@ export async function runMachineItemUpdate(
         }
         const outcome = result.response.result as { alreadyCurrent?: unknown } | null | undefined;
         if (outcome?.alreadyCurrent === true) {
-            setRecord(serverId, item.id, { status: 'alreadyCurrent' });
+            completed = 'alreadyCurrent';
             return;
         }
-        setRecord(serverId, item.id, { status: 'finished' });
-        recordUpdateCompleted(scope, item.id);
+        completed = 'finished';
     } catch {
         setRecord(serverId, item.id, { status: 'failed', message: t('updates.row.failedGeneric') });
     } finally {
-        refreshMachineUpdateFacts(serverId, machineId);
+        await refreshMachineUpdateFacts(serverId, machineId);
+        if (completed) {
+            setRecord(serverId, item.id, { status: completed });
+            if (completed === 'finished') recordUpdateCompleted(scope, item.id);
+        }
     }
 }

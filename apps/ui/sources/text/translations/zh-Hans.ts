@@ -625,7 +625,8 @@ export const zhHans: TranslationStructure = {
         commands: {
             composerAbortConfirm: '确认中止',
             composerFocus: '聚焦输入框',
-            composerSendImmediate: '立即发送',
+            composerSendImmediate: '切换发送方式（排队 / 引导）',
+            composerSendInterrupt: '中断并发送',
             composerSendPending: '发送到待处理队列',
             commandPaletteOpen: '打开命令面板',
             modeCycle: '切换模式',
@@ -661,6 +662,14 @@ export const zhHans: TranslationStructure = {
   },
 
   transcript: {
+
+    quote: {
+
+      action: '引用',
+
+      actionA11y: '在消息中引用所选文本',
+
+    },
 
     selection: {
 
@@ -1146,6 +1155,15 @@ export const zhHans: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "保存诊断信息",
+      diagnosticsSaveFailed: "无法保存诊断信息。崩溃详情仍然可用。请重试或复制详情。",
+      copyFailed: "无法复制崩溃详情。请重试。",
+      discardFailed: "无法丢弃已保存的崩溃。请重试。",
+      restartWithoutReport: "不保存并重启",
+      reportSaveFailed: "无法保存崩溃详情。请在重启前复制错误详情，或重试报告。",
+      savedReportNotice: "已保存的崩溃显示在下方。请在提交前检查并编辑。提交或丢弃前，信息会保留在此设备上。",
+      discardSavedReport: "丢弃已保存的崩溃",
+      stackTruncated: "此字段中的堆栈已缩短。完整崩溃信息仍保存在此设备上。",
     title: "出错了",
     subtitle: "Happier 发生了意外错误。你可以重启应用界面，或复制详细信息以便支持排查。",
     detailsTitle: "错误详情",
@@ -3429,6 +3447,10 @@ export const zhHans: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: '使用 Windows 标题栏',
+    nativeTitleBarSubtitle: '显示 Windows 标准窗口边框和控制按钮。',
+    nativeTitleBarChangeFailed: '无法更改标题栏。请重试。',
+    nativeTitleBarPersistenceFailed: '无法加载或保存标题栏偏好设置。请再次更改此设置以重试。',
     title: '桌面',
     footer: '控制 Happier 在这台电脑上的行为。',
     backgroundServiceTitle: '在后台保持可连接',
@@ -3632,6 +3654,17 @@ export const zhHans: TranslationStructure = {
         openSettingsFailed: '无法打开系统设置。',
     },
     pushTroubleshooting: {
+            remoteTest: {
+                title: "发送远程测试",
+                subtitle: "通过连接到此 Home 的机器，向此手机发送真实的推送通知。",
+                notRegistered: "请注册此手机的令牌，然后重试。",
+                noMachine: "请将机器连接到此 Home，以发送远程测试。",
+                accepted: "推送服务已接受测试。这并不确认手机已收到或显示通知。请检查通知。",
+                rejected: "推送服务未确认接受。再次尝试前，请检查通知和注册状态。",
+                invalidCredentials: "推送提供商拒绝了此应用的凭据。请检查 APNs 或 FCM 配置。",
+                unsupported: "请更新所连接机器的 Happier CLI，以发送远程测试。",
+                unconfirmed: "无法确认结果。请求仍可能完成；再次尝试前请检查通知。",
+            },
       status: {
         title: "状态",
         footer: "检查账户设置、系统权限以及服务器注册状态。",
@@ -3768,7 +3801,12 @@ export const zhHans: TranslationStructure = {
   },
 
   notifications: {
+      permissionActionNeedsReview: "无法确认从通知发送的回复。请先查看待处理请求，再次回复。",
+      permissionActionReviewUnavailable: "无法打开此回复对应的 Home 和账户。请在设置中检查连接和登录状态，然后查看待处理请求。",
     actions: {
+          reviewPendingRequests: "查看待处理请求",
+          questionReply: "回复",
+          questionPlaceholder: "你的回答",
       allow: '允许',
       deny: '拒绝',
       answer: '回答',
@@ -4284,6 +4322,16 @@ export const zhHans: TranslationStructure = {
           },
         },
         fields: {
+          codexReasoningSummaries: {
+              title: "推理摘要",
+              footer: "控制 Codex 是否生成摘要，与对话中的显示方式无关。在启动或恢复会话时生效。可用性取决于模型。",
+              generation: "生成",
+              options: {
+                  default: "使用 Codex 配置或模型默认值。",
+                  enabled: "在模型支持时请求摘要。",
+                  disabled: "不生成推理摘要。",
+              },
+          },
           codexBackendMode: {
             title: "Codex 路由模式",
             subtitle: "选择 App Server、ACP 或 MCP。",
@@ -4319,6 +4367,8 @@ export const zhHans: TranslationStructure = {
 
   settingsAppearance: {
     tabBarAppearance: {
+      sideRailTitle: "在侧边栏中显示标签页",
+      sideRailSubtitle: "关闭后使用 Happier 的标签栏及其滑动手势。",
       title: '标签栏',
       footer: '自定义底部标签栏。',
       showLabels: '显示标签栏文字',
@@ -6360,6 +6410,17 @@ export const zhHans: TranslationStructure = {
       presetName: '预设名称', movePresetUp: '上移预设', movePresetDown: '下移预设',
       noPresets: '没有已保存的预设', noPresetsMessage: '下次选择自定义提醒时即可保存。',
     },
+    appearance: {
+      setColor: '设置颜色',
+      customColor: '自定义颜色…',
+      customColorTitle: '自定义颜色',
+      customColorMessage: '选择一个色调，或输入十六进制值。',
+      invalidColor: '请使用十六进制值，例如 #3A7BD5。',
+      removeColor: '移除颜色',
+      inheritedFromProject: '来自项目',
+      customColorLabel: ({ hex }: { hex: string }) => `自定义颜色 ${hex}`,
+      colors: { blue: '蓝色', green: '绿色', orange: '橙色', yellow: '黄色', red: '红色', indigo: '靛蓝', purple: '紫色' },
+    },
     workingSectionTitle: '正在工作',
     hideInactiveSessions: '隐藏非活动会话',
     showInactiveSessions: '显示非活动会话',
@@ -6528,6 +6589,9 @@ export const zhHans: TranslationStructure = {
     tmuxFallback: "tmux 回退",
     copyMetadata: "复制元数据",
     copyDebugInformation: "复制信息",
+    sessionInformation: "会话信息",
+    happierSessionId: "Happier 会话 ID",
+    providerSessionId: ({ provider }: { provider: string }) => `${provider} 会话 ID`,
     debugInformationCopyLabel: "信息",
     providerSessionLogs: ({ provider }: { provider: string }) => `${provider} 会话日志`,
     agentState: "Agent 状态",
@@ -6540,6 +6604,9 @@ export const zhHans: TranslationStructure = {
     thinking: "思考中",
     thinkingSince: "思考开始时间",
     thinkingLevel: "思考级别",
+    peerReportFrom: ({ name }: { name: string }) => `来自${name}的报告`,
+    peerMessageFrom: ({ name }: { name: string }) => `来自${name}的消息`,
+    peerUnnamedSender: "另一个代理",
     cliVersion: "CLI 版本",
     cliVersionOutdated: "需要更新 CLI",
     cliVersionOutdatedMessage: ({
@@ -6556,6 +6623,8 @@ export const zhHans: TranslationStructure = {
     deleteSessionConfirm: "永久删除会话？",
     deleteSessionWarning:
       "此操作无法撤销。与此会话相关的所有消息和数据将被永久删除。",
+    stopAndDeleteSession: "停止并删除",
+    stopAndDeleteSessionWarning: "这将停止会话，并永久删除其所有消息和数据。此操作无法撤销。",
     failedToDeleteSession: "删除会话失败",
     sessionDeleted: "会话删除成功",
     manageSharing: "管理共享",
@@ -6613,6 +6682,11 @@ export const zhHans: TranslationStructure = {
   },
 
   agentInput: {
+      sendOptions: {
+          title: "发送选项",
+          queue: "加入队列",
+          hint: "长按选择发送方式",
+      },
       chipPicker: {
           selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}。已选择。`,
       },
@@ -9587,7 +9661,7 @@ settingsSession: {
       offline: "部分机器处于离线状态",
       checkedAt: ({ time }: { time: string }) => `上次检查：${time}`,
       upToDateDescription: "Happier、其命令行工具和你的代理都已是最新版本。",
-      unknownDescription: "所有能检查的内容都已是最新。其余部分会在可以连接时重新检查。",
+      unknownDescription: "部分更新信息不可用或来自缓存。请查看相关行以了解详情。",
       offlineDescription: "所有可连接的内容都已是最新。离线机器会在重新上线后检查。",
     },
     settingsSubtitle: {
@@ -9633,6 +9707,9 @@ settingsSession: {
       appCheckFailed: "无法检查是否有新版本。",
       appDownloadFailed: "下载未完成。",
       appInstallFailed: "无法安装更新。",
+      cachedRelease: "缓存的发布信息；此处不会刷新",
+      cachedReleaseChannel: ({ channel }: { channel: string }) => `缓存的 ${channel} 发布信息；此处不会刷新`,
+      manualUpdateInterruptsSessions: "请在此计算机上更新。服务可能停止，运行中的会话可能结束。",
       latestUnknown: "无法检查是否有新版本",
       rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} 未能在这台机器上启动，因此仍保持 ${kept}。`,
       installedByYou: "由你安装",
@@ -9892,6 +9969,7 @@ settingsSession: {
     failedToConnectTerminal: "连接终端失败",
     cameraPermissionsRequiredToConnectTerminal: "连接终端需要相机权限",
     failedToLinkDevice: "链接设备失败",
+    deviceLinkRequestNotFound: "此中继上没有待处理的设备关联请求。请确认两台设备使用同一个中继，然后生成新的二维码。",
     cameraPermissionsRequiredToScanQr: "扫描二维码需要相机权限",
     qrScannerUnavailable: "无法打开二维码扫描器。请重试或手动输入 URL。",
   },

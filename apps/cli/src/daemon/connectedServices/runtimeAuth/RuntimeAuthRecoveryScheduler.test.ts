@@ -14,6 +14,10 @@ import type { DurableRecoveryStore } from '../recoveryScheduler/DurableBackoffRe
 import { createRecoveryIntentFileStore } from '../recoveryScheduler/recoveryIntentFileStore';
 import { decideConnectedServiceRecovery } from './ConnectedServiceRecoveryPolicy';
 import { createConnectedServiceContinuationMessageDispatcher } from '../continuation/createConnectedServiceContinuationMessageDispatcher';
+import { ConnectedServiceAuthGroupSwitchCoordinator, InMemoryConnectedServiceAuthGroupSwitchLeaseRegistry,
+  type ConnectedServiceAuthGroupSwitchState } from '../accountGroups/switching/ConnectedServiceAuthGroupSwitchCoordinator';
+import { DEFAULT_CONNECTED_SERVICE_AUTH_GROUP_POLICY_V1 } from '../accountGroups/selection/selectConnectedServiceAuthGroupCandidate';
+import { DEFAULT_USAGE_LIMIT_RECOVERY_BACKOFF_MS } from '@/session/usageLimitRecoveryControls/createBackoffSessionUsageLimitRecoveryControlAdapter';
 
 function classification(): ConnectedServiceRuntimeFailureClassification {
   return {
@@ -52,6 +56,74 @@ function createDeferred<T>(): {
 }
 
 describe('RuntimeAuthRecoveryScheduler', () => {
+  it('retries real group lease contention without spending provider attempts, then adopts a usable switch', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const leases = new InMemoryConnectedServiceAuthGroupSwitchLeaseRegistry({ leaseTimeoutMs: 10 });
+    const owner = leases.acquire({ serviceId: 'openai-codex', groupId: 'team' });
+    if (owner.kind !== 'owner') throw new Error('Expected group owner');
+    let current: ConnectedServiceAuthGroupSwitchState = {
+      serviceId: 'openai-codex', groupId: 'team', activeProfileId: 'primary', generation: 1,
+      runtimeStateRevision: 0,
+      policy: { ...DEFAULT_CONNECTED_SERVICE_AUTH_GROUP_POLICY_V1, strategy: 'priority', autoSwitch: true },
+      members: [
+        { profileId: 'primary', priority: 1, createdAtMs: 1, enabled: true },
+        { profileId: 'backup', priority: 2, createdAtMs: 2, enabled: true },
+      ], memberStatesByProfileId: new Map(),
+    };
+    // Group state, CAS and application are the remote storage/session boundaries.
+    const coordinator = new ConnectedServiceAuthGroupSwitchCoordinator({
+      leases, nowMs: Date.now, quotaFreshnessMs: 60_000,
+      loadState: async () => current,
+      commitSwitch: async ({ toProfileId }) => (current = { ...current, activeProfileId: toProfileId, generation: 2 }),
+      applyGeneration: async () => ({ mode: 'hot_apply' }),
+    });
+    const switchGroup = () => coordinator.switchAfterClassifiedFailure({
+      sessionId: 'lease-contention', serviceId: 'openai-codex', groupId: 'team',
+      reason: 'usage_limit', observedProfileId: 'primary',
+    });
+    const scheduler = new RuntimeAuthRecoveryScheduler({
+      nowMs: Date.now, maxAttempts: 2, jitterMs: () => 0,
+      recover: async () => ({ status: 'switch_attempted', result: await switchGroup() }),
+    });
+    try {
+      const begun = await scheduler.beginClassifiedFailure({
+        sessionId: 'lease-contention', switchesThisTurn: 0, classification: classification(),
+      });
+      const initial = switchGroup().catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(10);
+      const error = await initial;
+      expect(error).toBeInstanceOf(Error);
+      await expect(scheduler.enqueueHandlerFailure({
+        sessionId: 'untyped-lease-message', switchesThisTurn: 0, classification: classification(),
+        error: new Error('connected_service_auth_group_switch_lease_expired'),
+      })).resolves.toMatchObject({ status: 'terminal_non_retry', retryable: false });
+      await expect(scheduler.enqueueHandlerFailure({
+        sessionId: 'lease-contention', switchesThisTurn: 0, classification: classification(),
+        expectedAttemptId: begun.attemptId, error,
+      })).resolves.toMatchObject({ status: 'scheduled', retryable: true, attemptId: begun.attemptId });
+      for (const degradedAttemptCount of [1, 2, 3]) {
+        const wake = scheduler.wake({ sessionId: 'lease-contention', reason: 'manual', attemptId: begun.attemptId });
+        await vi.advanceTimersByTimeAsync(10);
+        await expect(wake).resolves.toEqual({ status: 'waiting' });
+        expect(scheduler.read('lease-contention')).toMatchObject({
+          status: 'waiting', attemptId: begun.attemptId, attemptCount: 0, degradedAttemptCount,
+          lastError: 'connected_service_auth_group_switch_lease_expired',
+        });
+        expect(leases.acquire({ serviceId: 'openai-codex', groupId: 'team' }).kind).toBe('loser');
+      }
+      owner.finish();
+      await expect(scheduler.wake({ sessionId: 'lease-contention', reason: 'manual', attemptId: begun.attemptId }))
+        .resolves.toEqual({ status: 'waiting' });
+      expect(scheduler.read('lease-contention')).toMatchObject({
+        status: 'resumed_awaiting_proof', attemptId: begun.attemptId, attemptCount: 1,
+        pendingTargetProfileId: 'backup', pendingTargetGeneration: 2,
+      });
+    } finally {
+      owner.finish(); scheduler.dispose(); vi.useRealTimers();
+    }
+  });
+
   it('keeps current issue association when an unscoped legacy observer repeats the same failure', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'happier-legacy-observer-'));
     const store = createRecoveryIntentFileStore<RuntimeAuthRecoveryIntent>(join(dir, 'recovery.json'));
@@ -1761,11 +1833,12 @@ describe('RuntimeAuthRecoveryScheduler', () => {
     });
   });
 
-  it('keeps a non-group recovery_action_required terminal when no wait-until is computable', async () => {
+  it.each([null, 500])('rechecks a non-group usage limit with reset %s after the shared fallback', async (resetsAtMs) => {
     const scheduler = new RuntimeAuthRecoveryScheduler({
       nowMs: () => 1_000,
       baseBackoffMs: 100,
       maxBackoffMs: 1_000,
+      maxAttempts: 1,
       jitterMs: () => 0,
       recover: async () => ({
         status: 'recovery_action_required' as const,
@@ -1788,16 +1861,18 @@ describe('RuntimeAuthRecoveryScheduler', () => {
     await scheduler.beginClassifiedFailure({
       sessionId: 'session-1',
       switchesThisTurn: 0,
-      classification: classificationFor({ groupId: null, resetsAtMs: null }),
+      classification: classificationFor({ groupId: null, resetsAtMs }),
     });
     await expect(scheduler.wakeByKey({
       recoveryKey,
       reason: 'manual',
-    })).resolves.toEqual({ status: 'terminal' });
+    })).resolves.toEqual({ status: 'waiting' });
 
     expect(scheduler.readByKey(recoveryKey)).toMatchObject({
-      status: 'cancelled',
-      terminalReason: 'recovery_action_required',
+      status: 'waiting',
+      nextRetryAtMs: 1_000 + DEFAULT_USAGE_LIMIT_RECOVERY_BACKOFF_MS,
+      lastError: 'awaiting_limit_reset',
+      terminalReason: null,
     });
   });
 

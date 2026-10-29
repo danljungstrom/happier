@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PUBLIC_RPC_HANDLER_ERROR_CODES } from '@happier-dev/protocol/rpcErrors';
+import { SESSION_RPC_METHODS } from '@happier-dev/protocol';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import { FakePermissionClient } from '../../utils/permissionHandler.testkit';
@@ -17,16 +18,13 @@ import { createFakeControlPort } from '../tuiControls/fakeControlPort';
 import { ClaudeLocalPermissionBridge } from '../../localPermissions/localPermissionBridge';
 import { routeClaudePermissionHook } from '../../localPermissions/routeClaudePermissionHook';
 import { createClaudeSessionTranscriptProjector } from '../../localControl/createClaudeSessionTranscriptProjector';
+import { createClaudeUnifiedHookLifecycleBridge } from '../createClaudeUnifiedHookLifecycleBridge';
+import { createClaudeUnifiedInputArbiter } from '../createClaudeUnifiedInputArbiter';
 
 const QUESTIONS = [{ question: 'Which probe color?', header: 'Header Color', multiSelect: false,
   options: [{ label: 'Amber', description: 'Warm amber probe color.' }, { label: 'Blue', description: 'Cool blue probe color.' }],
 }];
-const SCREEN = [
-  '─────────────────────────', ' ☐ Header Color', '', 'Which probe color?', '',
-  '❯ 1. Amber', '     Warm amber probe color.', '  2. Blue', '     Cool blue probe color.',
-  '  3. Type something.', '─────────────────────────', '  4. Chat about this', '',
-  'Enter to select · ↑/↓ to navigate · Esc to cancel',
-].join('\n');
+const SCREEN = readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.304-question-single.txt', import.meta.url), 'utf8');
 
 const sessions = new Set<Session>();
 afterEach(() => {
@@ -57,6 +55,94 @@ function createHarness() {
 }
 
 describe('native prompts through the existing terminal dialog owner', () => {
+  it('publishes the full correlated Bash command with the native explanation instead of a clipped command tail', async () => {
+    const { session, broker, client } = createHarness();
+    const command = readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.310-permission-clipped-command.sh.txt', import.meta.url), 'utf8').trim();
+    const tool = { session_id: 'claude-native-session', tool_name: 'Bash', tool_input: { command } };
+    session.onClaudeSessionHook({ ...tool, hook_event_name: 'PreToolUse', tool_use_id: 'toolu-long-command' });
+    session.onClaudeSessionHook({ ...tool, hook_event_name: 'ClaudeNativePrompt' });
+    const explanation = 'Permission rule Bash(cat *) requires confirmation for this command.\n /permissions to update rules\n\n Do you want to proceed?';
+    const screen = readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.310-permission-clipped-command.txt', import.meta.url), 'utf8');
+    const dialog = broker.resolveVisibleDialog(parseClaudeScreenState(screen));
+    expect(dialog).toMatchObject({ kind: 'native', dialogId: 'tool_permission', question: `${command}\n\n${explanation}` });
+    if (!dialog) throw new Error('expected current native permission');
+    const pending = broker.requestDialogChoice({ dialog });
+    void pending.catch(() => {});
+    await vi.waitFor(() => expect(client.agentState.requests['native-1']).toMatchObject({ arguments: { questions: [{
+      question: `${command}\n\n${explanation}`,
+      options: [{ label: 'Yes', choice: 'option_1' }, { label: 'No', choice: 'option_2' }],
+    }] } }));
+    await broker.dispose();
+  });
+
+  it('publishes the full hook-owned questions while their native tab header is above the viewport', async () => {
+    const { session, broker, client } = createHarness();
+    const screen = readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.310-question-clipped.txt', import.meta.url), 'utf8');
+    const input = JSON.parse(readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.310-question-clipped-input.json', import.meta.url), 'utf8'));
+    session.onClaudeSessionHook({ hook_event_name: 'ClaudeNativePrompt', session_id: 'claude-native-session',
+      tool_use_id: 'toolu-clipped-question', tool_name: 'AskUserQuestion', tool_input: input,
+    });
+    const dialog = broker.resolveVisibleDialog(parseClaudeScreenState(screen));
+    expect(dialog).toMatchObject({ kind: 'native', dialogId: 'ask_user_question' });
+    if (!dialog) throw new Error('expected current native question');
+    const pending = broker.requestDialogChoice({ dialog });
+    void pending.catch(() => {});
+    await vi.waitFor(() => expect(client.agentState.requests['toolu-clipped-question']).toMatchObject({ arguments: { questions: input.questions } }));
+    await broker.dispose();
+  });
+
+  it('releases native input after repeated ingress observes one tool prompt resolved in the terminal', async () => {
+    const { session, broker, client } = createHarness();
+    const injected: string[] = [];
+    const arbiter = createClaudeUnifiedInputArbiter({
+      quietPeriodMs: 0,
+      injectPrompt: async (batch) => {
+        injected.push(batch.message);
+        return { status: 'injected', at: Date.now(), bytesWritten: batch.message.length };
+      },
+    });
+    const lifecycle = createClaudeUnifiedHookLifecycleBridge({
+      subscribeClaudeSessionHooks: (callback) => {
+        session.addClaudeSessionHookCallback(callback);
+        return () => session.removeClaudeSessionHookCallback(callback);
+      },
+      arbiter, completionQuiescenceMs: 0,
+    });
+    lifecycle.start({ abortSignal: new AbortController().signal });
+    arbiter.observeLifecycle({ type: 'output' });
+    const ingress = () => routeClaudePermissionHook({
+      data: { hook_event_name: 'PreToolUse', session_id: 'claude-native-session',
+        tool_use_id: 'native-repeat', tool_name: 'AskUserQuestion', tool_input: { questions: QUESTIONS } },
+      session, bridge: null, settings: {}, unifiedTerminalActive: true,
+    });
+    try {
+      await ingress();
+      const dialog = broker.resolveVisibleDialog(parseClaudeScreenState(SCREEN));
+      if (!dialog) throw new Error('expected native question');
+      const pending = broker.requestDialogChoice({ dialog });
+      void pending.catch(() => {});
+      await vi.waitFor(() => expect(client.agentState.requests['native-repeat']).toBeDefined());
+      await ingress();
+      await arbiter.enqueueUiMessage({ message: 'continue after native answer', origin: { kind: 'ui_immediate' } });
+      await arbiter.drainWhenSafe();
+      expect(injected).toEqual([]);
+
+      await broker.observeTranscript({ sessionId: 'claude-native-session', type: 'user',
+        toolUseResult: { answers: { 'Which probe color?': 'Blue' } },
+        message: { content: [{ type: 'tool_result', tool_use_id: 'native-repeat' }] },
+      });
+      await arbiter.drainWhenSafe();
+      expect(injected).toEqual(['continue after native answer']);
+      expect(client.agentState.requests['native-repeat']).toBeUndefined();
+      expect(client.agentState.completedRequests['native-repeat']).toMatchObject({ status: 'approved' });
+      await expect(pending).rejects.toThrow();
+    } finally {
+      await broker.dispose();
+      lifecycle.dispose();
+      await arbiter.dispose();
+    }
+  });
+
   it.each(['current primary', 'headless sidechain', 'legacy no live hook', 'legacy sidechain history'] as const)('correlates repeated provider requests without claiming a historical or another agent identity (%s)', async (source) => {
     const dir = await mkdtemp(join(tmpdir(), 'claude-live-permission-id-'));
     const { session, broker, client } = createHarness();
@@ -289,6 +375,42 @@ describe('native prompts through the existing terminal dialog owner', () => {
     await broker.dispose();
   });
 
+  it('publishes read-outside-directory scopes and applies the selected one-time approval through the existing permission path', async () => {
+    const { session, broker, client } = createHarness();
+    const tool = { session_id: 'claude-native-session', tool_name: 'Read', tool_input: { file_path: '/tmp/outside-read-probe.txt' } };
+    session.onClaudeSessionHook({ ...tool, hook_event_name: 'PreToolUse', tool_use_id: 'toolu-read-outside' });
+    session.onClaudeSessionHook({ ...tool, hook_event_name: 'ClaudeNativePrompt', happierResponseLocation: 'app_and_terminal' });
+    const labels = [
+      'Yes, and keep allowing any reads outside the working directories',
+      'No, and block reads outside the working directories from now on',
+      'No, and ask again next time',
+      'Yes, but ask again next time',
+    ];
+    const initial = readFileSync(new URL('../tuiControls/__fixtures__/claude-2.1.310-read-outside.txt', import.meta.url), 'utf8');
+    const screen = (focused: number) => initial.replace(/^ [ ❯] (\d+)\./gmu,
+      (_, number: string) => ` ${focused + 1 === Number(number) ? '❯' : ' '} ${number}.`);
+    const idle = '──────────────────\n❯ \n──────────────────';
+    const port = createFakeControlPort({ captures: [screen(0), screen(0), screen(0), screen(1), screen(2), screen(3), idle] });
+    const probe = createClaudeUnifiedDialogChoiceScreenProbe({
+      broker, port, wait: async () => {}, graceMs: 0, settleMs: 1,
+      verifyPollIntervalMs: 1, verifyPollTimeoutMs: 5, isDialogOwned: () => false,
+    });
+    await expect(probe.probe()).resolves.toMatchObject({ kind: 'request_published', dialogId: 'tool_permission' });
+    await vi.waitFor(() => expect(client.agentState.requests['native-1']).toBeDefined());
+    expect(client.agentState.requests['native-1']).toMatchObject({ arguments: { questions: [{
+      options: labels.map((label, index) => ({ label, choice: `option_${index + 1}` })),
+    }] } });
+    await expect(client.rpcHandlerManager.getHandler('permission')!({
+      id: 'native-1', approved: true, structuredAnswersV1: { claudeNativePermission: ['option_4'] },
+    })).resolves.toEqual({ ok: true });
+    expect(port.sentKeys).toEqual(['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']);
+    expect(port.sentLiteral).toEqual([]);
+    expect(client.agentState.requests['native-1']).toBeUndefined();
+    expect(client.agentState.completedRequests['native-1']).toMatchObject({ dialogChoice: 'option_4' });
+    probe.dispose();
+    await broker.dispose();
+  });
+
   it('retires an observed native permission when the app state acknowledgment fails after execution', async () => {
     const { session, broker, client } = createHarness();
     const tool = { session_id: 'claude-native-session', tool_name: 'Bash', tool_input: { command: 'python3 -c "print(671)"' } };
@@ -369,8 +491,17 @@ describe('native prompts through the existing terminal dialog owner', () => {
     });
     await expect(probe.probe()).resolves.toMatchObject({ kind: 'request_published', dialogId: 'ask_user_question' });
     await vi.waitFor(() => expect(client.agentState.requests['toolu-native-1']).toBeDefined());
-    await expect(client.rpcHandlerManager.getHandler('permission')!({
-      id: 'toolu-native-1', approved: true, structuredAnswersV1: { 'Which probe color?': ['Blue'] },
+    const request = client.agentState.requests['toolu-native-1'];
+    const occurrenceId = request && typeof request === 'object' && 'occurrenceId' in request ? request.occurrenceId : null;
+    if (typeof occurrenceId !== 'string') throw new Error('expected published occurrence identity');
+    expect(occurrenceId).not.toBe('toolu-native-1');
+    const respond = client.rpcHandlerManager.getHandler(SESSION_RPC_METHODS.SESSION_PERMISSION_RESPOND_TO_OCCURRENCE_V1)!;
+    await expect(respond({ id: 'toolu-native-1', occurrenceId: 'toolu-native-1', approved: true,
+      structuredAnswersV1: { 'Which probe color?': ['Blue'] },
+    })).rejects.toMatchObject({ publicErrorCode: PUBLIC_RPC_HANDLER_ERROR_CODES.STRUCTURED_QUESTION_RECEIVER_NOT_OWNER });
+    expect(port.sentKeys).toEqual([]);
+    await expect(respond({
+      id: 'toolu-native-1', occurrenceId, approved: true, structuredAnswersV1: { 'Which probe color?': ['Blue'] },
     })).resolves.toEqual({ ok: true });
     expect(port.sentKeys).toEqual(['ArrowDown', 'Enter']);
     expect(client.agentState.requests['toolu-native-1']).toBeUndefined();

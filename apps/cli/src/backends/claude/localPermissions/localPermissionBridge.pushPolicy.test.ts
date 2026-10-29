@@ -18,56 +18,50 @@ function createSessionStub(sendToAllDevicesAsync: ReturnType<typeof vi.fn>) {
 }
 
 describe('ClaudeLocalPermissionBridge push policy', () => {
-  it('suppresses permission-request pushes when disabled in account settings', async () => {
+  it.each([false, true])('applies permission-request push setting %s to a live request', async (enabled) => {
     const sendToAllDevicesAsync = vi.fn(async () => {});
     const session = createSessionStub(sendToAllDevicesAsync);
     session.accountSettings = accountSettingsParse({
-      notificationsSettingsV1: { v: 1, pushEnabled: true, ready: true, permissionRequest: false },
+      notificationsSettingsV1: { v: 1, pushEnabled: true, ready: true, permissionRequest: enabled },
     });
-
     const bridge = new ClaudeLocalPermissionBridge(session, { responseTimeoutMs: 10_000 });
     bridge.activate();
-
-    const p = bridge.handlePermissionHook({
-      tool_use_id: 'tool1',
-      tool_name: 'Read',
-      tool_input: { path: 'a' },
+    const pending = bridge.handlePermissionHook({
+      tool_use_id: 'tool1', tool_name: 'Read', tool_input: { path: 'a' },
     });
-
-    bridge.dispose();
-    await p;
-
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(sendToAllDevicesAsync).not.toHaveBeenCalled();
+    try {
+      if (enabled) {
+        await vi.waitFor(() => expect(sendToAllDevicesAsync).toHaveBeenCalledTimes(1));
+        expect(sendToAllDevicesAsync).toHaveBeenCalledWith(
+          'Refactor auth flow',
+          expect.stringContaining('Claude Code CLI asks permission to use Read'),
+          expect.objectContaining({ sessionId: 's1', requestId: 'tool1', occurrenceId: expect.any(String) }),
+        );
+      } else {
+        // Drain the publication continuation before retiring the live request.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(sendToAllDevicesAsync).not.toHaveBeenCalled();
+      }
+    } finally {
+      bridge.dispose();
+      await pending;
+    }
   });
 
-  it('sends permission-request pushes when enabled in account settings', async () => {
+  it('does not push a request retired before its publication continuation', async () => {
     const sendToAllDevicesAsync = vi.fn(async () => {});
     const session = createSessionStub(sendToAllDevicesAsync);
     session.accountSettings = accountSettingsParse({
       notificationsSettingsV1: { v: 1, pushEnabled: true, ready: true, permissionRequest: true },
     });
-
     const bridge = new ClaudeLocalPermissionBridge(session, { responseTimeoutMs: 10_000 });
     bridge.activate();
-
-    const p = bridge.handlePermissionHook({
-      tool_use_id: 'tool1',
-      tool_name: 'Read',
-      tool_input: { path: 'a' },
+    const pending = bridge.handlePermissionHook({
+      tool_use_id: 'tool1', tool_name: 'Read', tool_input: { path: 'a' },
     });
-
     bridge.dispose();
-    await p;
-
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(sendToAllDevicesAsync).toHaveBeenCalledTimes(1);
-    expect(sendToAllDevicesAsync).toHaveBeenCalledWith(
-      'Refactor auth flow',
-      expect.stringContaining('Claude Code CLI asks permission to use Read'),
-      expect.objectContaining({ sessionId: 's1', requestId: 'tool1' }),
-    );
+    await pending;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(sendToAllDevicesAsync).not.toHaveBeenCalled();
   });
 });

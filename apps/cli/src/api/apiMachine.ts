@@ -73,6 +73,7 @@ import { readAccountSettingsVersionFromHint } from '@/settings/accountSettings/a
 import { resolveServerHttpBaseUrl } from '@/session/transport/http/serverHttpBaseUrl';
 import { fetchAccountProfile } from '@/api/accountProfile';
 import type { RpcHandlerActiveExecution } from '@/api/rpc/types';
+import { PushNotificationClient } from './pushNotifications';
 
 export type ApiMachineClientDeps = Readonly<{
     connectedAccounts?: ScmConnectedAccountCredentialResolver;
@@ -422,6 +423,7 @@ export class ApiMachineClient {
     }: MachineRpcHandlers, deps?: MachineRpcHandlerDeps) {
         const machineRpcLifecycleRegistration = registerMachineRpcHandlers({
             rpcHandlerManager: this.rpcHandlerManager,
+            machineId: this.machine.id,
             handlers: {
                 spawnSession,
                 ...(spawnSessionForHandoff ? { spawnSessionForHandoff } : {}),
@@ -439,6 +441,7 @@ export class ApiMachineClient {
             },
             deps: {
                 ...deps,
+                pushNotifications: new PushNotificationClient(this.token, resolveServerHttpBaseUrl()),
                 connectedServiceImportAccount: this.connectedServiceImportAccount,
                 machineRpcWorkingDirectory: this.machineRpcWorkingDirectory,
                 filesystemAccessPolicy: this.filesystemAccessPolicy,
@@ -454,6 +457,15 @@ export class ApiMachineClient {
             },
         });
         this.rpcLifecycleRegistrations.push(machineRpcLifecycleRegistration);
+    }
+
+    /** Invoke the registered machine control locally through its canonical handler. */
+    async invokeLocalMachineAction(
+        method: string,
+        request: unknown,
+        options?: Readonly<{ signal?: AbortSignal }>,
+    ): Promise<unknown> {
+        return await this.rpcHandlerManager.invokeLocal(method, request, options);
     }
 
     onUpdate(listener: (update: Update) => boolean | void): () => void {

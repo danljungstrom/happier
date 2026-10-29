@@ -852,9 +852,7 @@ function useSessionListDataState(
         () => normalizeSessionFolders(sessionFoldersV1 ?? { v: 1, folders: [] }),
         [sessionFoldersV1],
     );
-    const sessionFoldersAvailableForStorage = storageFilter !== 'direct';
-    const folderTreeSourceActive = sessionFoldersAvailableForStorage
-        && sessionFoldersEnabled
+    const folderTreeSourceActive = sessionFoldersEnabled
         && sessionFolderViewModeV1 === 'tree';
 
     const folderSource = React.useMemo(() => {
@@ -908,10 +906,10 @@ function useSessionListDataState(
     );
 
     const assignmentFetchBatches = React.useMemo(
-        () => sessionFoldersAvailableForStorage && sessionFoldersEnabled && sessionFolderViewModeV1 === 'tree'
+        () => folderTreeSourceActive
             ? collectVisibleSessionIdsByServer(storageFilteredSource)
             : {},
-        [sessionFolderViewModeV1, sessionFoldersAvailableForStorage, sessionFoldersEnabled, storageFilteredSource],
+        [folderTreeSourceActive, storageFilteredSource],
     );
 
     React.useEffect(() => {

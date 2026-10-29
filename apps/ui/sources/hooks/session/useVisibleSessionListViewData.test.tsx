@@ -43,6 +43,9 @@ function makeOrganizationProjection(
         folderAssignmentsBySessionId: {},
         tagsById: {},
         tagAssignmentsBySessionId: {},
+        appearancesBySessionId: {},
+        sessionAppearancesBySessionId: {},
+        sessionAppearancesSupported: false,
         attentionStandingsBySessionId,
         labelsByLabelKey: {},
         orderEntriesByScopeKey: {},
@@ -363,6 +366,9 @@ describe('useVisibleSessionListViewData', () => {
             folderAssignmentsBySessionId: {},
             tagsById: {},
             tagAssignmentsBySessionId: {},
+            appearancesBySessionId: {},
+            sessionAppearancesBySessionId: {},
+            sessionAppearancesSupported: false,
             attentionStandingsBySessionId: {},
             labelsByLabelKey: {},
             orderEntriesByScopeKey: {
@@ -875,7 +881,7 @@ describe('useVisibleSessionListViewData', () => {
         await hook.unmount();
     });
 
-    it('does not fetch synced folder assignments for the Direct storage filter', async () => {
+    it('renders shared folders and refreshes assignments in the Direct storage filter', async () => {
         sourceData.sessionFoldersEnabled = true;
         sourceData.sessionFolderViewModeV1 = 'tree';
         sourceData.sessionFoldersV1 = {
@@ -924,10 +930,13 @@ describe('useVisibleSessionListViewData', () => {
                 },
             },
             folderAssignmentsBySessionId: {
-                'assigned-session': 'folder-a',
+                'direct-session': 'folder-a',
             },
             tagsById: {},
             tagAssignmentsBySessionId: {},
+            appearancesBySessionId: {},
+            sessionAppearancesBySessionId: {},
+            sessionAppearancesSupported: false,
             attentionStandingsBySessionId: {},
             labelsByLabelKey: {},
             orderEntriesByScopeKey: {
@@ -984,9 +993,29 @@ describe('useVisibleSessionListViewData', () => {
         expect(hook.getCurrent()?.filter((item) => item.type === 'session').map((item) => item.session.id))
             .toEqual(['direct-session']);
         expect(hook.getCurrent()?.some((item) => item.type === 'header' && item.headerKind === 'folder'))
-            .toBe(false);
-        expect(sourceData.fetchAndApplySessionFolderAssignments).not.toHaveBeenCalled();
+            .toBe(true);
+        expect(hook.getCurrent()?.find((item) => item.type === 'session' && item.session.id === 'direct-session'))
+            .toMatchObject({ folderId: 'folder-a', groupKind: 'folder' });
+        await vi.waitFor(() => {
+            expect(sourceData.fetchAndApplySessionFolderAssignments).toHaveBeenCalledWith(expect.objectContaining({
+                serverId: 'server-a', sessionIds: ['direct-session'], fetchPolicy: 'missing',
+            }));
+        });
         await hook.unmount();
+
+        const reloaded = await renderHook(() => useVisibleSessionListViewData('direct'));
+        expect(reloaded.getCurrent()?.find((item) => item.type === 'session' && item.session.id === 'direct-session'))
+            .toMatchObject({ folderId: 'folder-a', groupKind: 'folder' });
+        await reloaded.unmount();
+
+        // Successful import updates metadata on the same server session; organization stays keyed by its id.
+        sourceData.activeData = sourceData.activeData.map((item) => item.type === 'session' && item.session.id === 'direct-session'
+            ? { ...item, session: { ...item.session, metadataVersion: 2, metadata: { path: '/repo', host: 'machine-a' } } }
+            : item);
+        const imported = await renderHook(() => useVisibleSessionListViewData('persisted'));
+        expect(imported.getCurrent()?.find((item) => item.type === 'session' && item.session.id === 'direct-session'))
+            .toMatchObject({ folderId: 'folder-a', groupKind: 'folder' });
+        await imported.unmount();
     });
 
     it('refreshes visible folder assignments through the organization op', async () => {
@@ -1274,6 +1303,9 @@ describe('useVisibleSessionListViewData', () => {
             },
             tagsById: {},
             tagAssignmentsBySessionId: {},
+            appearancesBySessionId: {},
+            sessionAppearancesBySessionId: {},
+            sessionAppearancesSupported: false,
             attentionStandingsBySessionId: {},
             labelsByLabelKey: {},
             orderEntriesByScopeKey: {
@@ -2383,6 +2415,9 @@ describe('useVisibleSessionListViewData', () => {
             },
             tagsById: {},
             tagAssignmentsBySessionId: {},
+            appearancesBySessionId: {},
+            sessionAppearancesBySessionId: {},
+            sessionAppearancesSupported: false,
             attentionStandingsBySessionId: {},
             labelsByLabelKey: {},
             orderEntriesByScopeKey: {
@@ -2494,6 +2529,9 @@ describe('useVisibleSessionListViewData', () => {
             },
             tagsById: {},
             tagAssignmentsBySessionId: {},
+            appearancesBySessionId: {},
+            sessionAppearancesBySessionId: {},
+            sessionAppearancesSupported: false,
             attentionStandingsBySessionId: {},
             labelsByLabelKey: {},
             orderEntriesByScopeKey: {

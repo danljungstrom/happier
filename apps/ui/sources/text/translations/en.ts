@@ -441,7 +441,8 @@ export const en = {
         commands: {
             composerAbortConfirm: 'Confirm abort',
             composerFocus: 'Focus composer',
-            composerSendImmediate: 'Send immediately',
+            composerSendImmediate: 'Alternate send (queue / steer)',
+            composerSendInterrupt: 'Interrupt and send',
             composerSendPending: 'Send to pending queue',
             commandPaletteOpen: 'Open command palette',
             modeCycle: 'Cycle mode',
@@ -477,6 +478,10 @@ export const en = {
     },
 
     transcript: {
+        quote: {
+            action: 'Quote',
+            actionA11y: 'Quote the selected text in your message',
+        },
         selection: {
             enterA11y: 'Enter selection mode',
             exitA11y: 'Exit selection mode',
@@ -1008,6 +1013,15 @@ export const en = {
     },
 
     appCrash: {
+        saveDiagnostics: "Save diagnostics",
+        diagnosticsSaveFailed: "Diagnostics could not be saved. Your crash details are still available. Try again or copy them.",
+        copyFailed: "The crash details could not be copied. Try again.",
+        discardFailed: "The saved crash could not be discarded. Try again.",
+        restartWithoutReport: "Restart without saving",
+        reportSaveFailed: "Crash details could not be saved. Copy the error details before restarting, or try reporting again.",
+        savedReportNotice: "The saved crash is shown below. Review and edit it before submitting. It stays on this device until submission or dismissal.",
+        discardSavedReport: "Discard saved crash",
+        stackTruncated: "Stack shortened for this field. The full crash remains saved on this device.",
         title: 'Something went wrong',
         subtitle: 'Happier hit an unexpected error. You can restart the app UI or copy details for support.',
         detailsTitle: 'Error details',
@@ -3256,6 +3270,10 @@ export const en = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Use Windows title bar',
+        nativeTitleBarSubtitle: 'Show the standard Windows frame and window controls.',
+        nativeTitleBarChangeFailed: 'The title bar could not be changed. Try again.',
+        nativeTitleBarPersistenceFailed: 'The title bar preference could not be loaded or saved. Change it again to retry.',
         title: 'Desktop',
         footer: 'Controls how Happier behaves on this computer.',
         backgroundServiceTitle: 'Stay reachable in the background',
@@ -3458,6 +3476,17 @@ export const en = {
             openSettingsFailed: 'Could not open system settings.',
         },
         pushTroubleshooting: {
+            remoteTest: {
+                title: "Send a remote test",
+                subtitle: "Send a real push to this phone through a connected machine on this Home.",
+                notRegistered: "Register this phone’s token, then try again.",
+                noMachine: "Connect a machine on this Home to send a remote test.",
+                accepted: "The push service accepted the test. This does not confirm that your phone received or displayed it. Check your notifications.",
+                rejected: "The push service did not confirm acceptance. Check your notifications and registration before trying again.",
+                invalidCredentials: "The push provider rejected this app’s credentials. Check APNs or FCM configuration.",
+                unsupported: "Update the connected machine’s Happier CLI to send remote tests.",
+                unconfirmed: "The result could not be confirmed. The request may still complete; check your notifications before trying again.",
+            },
             status: {
                 title: 'Status',
                 footer: 'Checks the account setting, OS permission, and server registration state.',
@@ -3593,7 +3622,12 @@ export const en = {
     },
 
     notifications: {
+        permissionActionNeedsReview: "The response sent from the notification could not be confirmed. Review pending requests before responding again.",
+        permissionActionReviewUnavailable: "We couldn’t open the Home and Account for this response. Check your connection and sign-in in Settings, then review pending requests.",
         actions: {
+            reviewPendingRequests: "Review pending requests",
+            questionReply: "Reply",
+            questionPlaceholder: "Your answer",
             allow: 'Allow',
             deny: 'Deny',
             answer: 'Answer',
@@ -4125,6 +4159,16 @@ export const en = {
 	                    },
 	                },
 	                fields: {
+	                    codexReasoningSummaries: {
+	                        title: "Reasoning summaries",
+	                        footer: "Controls whether Codex generates summaries, independently of transcript display. Applies when starting or resuming a session. Availability depends on the model.",
+	                        generation: "Generation",
+	                        options: {
+	                            default: "Use your Codex configuration or model default.",
+	                            enabled: "Request summaries when the model supports them.",
+	                            disabled: "Do not generate reasoning summaries.",
+	                        },
+	                    },
 	                    codexBackendMode: {
 	                        title: 'Codex routing mode',
 	                        subtitle: 'Select App Server, ACP, or MCP.',
@@ -4160,6 +4204,8 @@ export const en = {
 
     settingsAppearance: {
       tabBarAppearance: {
+        sideRailTitle: "Tabs in side rail",
+        sideRailSubtitle: "Turn off to use Happier's tab bar and its swipe gestures.",
         title: 'Tab bar',
         footer: 'Customize the bottom tab bar.',
         showLabels: 'Show tab labels',
@@ -6233,6 +6279,17 @@ export const en = {
             presetName: 'Preset name', movePresetUp: 'Move preset up', movePresetDown: 'Move preset down',
             noPresets: 'No saved presets', noPresetsMessage: 'Save one the next time you choose a custom reminder.',
         },
+        appearance: {
+            setColor: 'Set color',
+            customColor: 'Custom color…',
+            customColorTitle: 'Custom color',
+            customColorMessage: 'Pick a shade or enter a hex value.',
+            invalidColor: 'Use a hex value like #3A7BD5.',
+            removeColor: 'Remove color',
+            inheritedFromProject: 'From the project',
+            customColorLabel: ({ hex }: { hex: string }) => `Custom color ${hex}`,
+            colors: { blue: 'Blue', green: 'Green', orange: 'Orange', yellow: 'Yellow', red: 'Red', indigo: 'Indigo', purple: 'Purple' },
+        },
         workingSectionTitle: 'Working',
         hideInactiveSessions: 'Hide inactive sessions',
         showInactiveSessions: 'Show inactive sessions',
@@ -6388,6 +6445,9 @@ export const en = {
         tmuxFallback: 'Tmux fallback',
         copyMetadata: 'Copy Metadata',
         copyDebugInformation: 'Copy information',
+        sessionInformation: "Session information",
+        happierSessionId: "Happier Session ID",
+        providerSessionId: ({ provider }: { provider: string }) => `${provider} Session ID`,
         debugInformationCopyLabel: 'Information',
         providerSessionLogs: ({ provider }: { provider: string }) => `${provider} session logs`,
         agentState: 'Agent State',
@@ -6400,6 +6460,9 @@ export const en = {
         thinking: 'Thinking',
         thinkingSince: 'Thinking Since',
         thinkingLevel: 'Thinking level',
+        peerReportFrom: ({ name }: { name: string }) => `Report from ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Message from ${name}`,
+        peerUnnamedSender: 'another agent',
         cliVersion: 'CLI Version',
         cliVersionOutdated: 'CLI Update Required',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
@@ -6409,6 +6472,8 @@ export const en = {
         deleteSessionSubtitle: 'Permanently remove this session',
         deleteSessionConfirm: 'Delete Session Permanently?',
         deleteSessionWarning: 'This action cannot be undone. All messages and data associated with this session will be permanently deleted.',
+        stopAndDeleteSession: "Stop and delete",
+        stopAndDeleteSessionWarning: "This will stop the session and permanently delete all its messages and data. This action cannot be undone.",
         failedToDeleteSession: 'Failed to delete session',
         sessionDeleted: 'Session deleted successfully',
         renameSession: 'Rename Session',
@@ -6480,6 +6545,11 @@ export const en = {
     },
 
     agentInput: {
+        sendOptions: {
+            title: "Send options",
+            queue: "Queue",
+            hint: "Hold to choose how to send",
+        },
         chipPicker: {
             selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}. Selected.`,
         },
@@ -9420,7 +9490,7 @@ settingsSession: {
             offline: 'Some machines are offline',
             checkedAt: ({ time }: { time: string }) => `Checked ${time}`,
             upToDateDescription: 'Happier, its command line and your agents are current.',
-            unknownDescription: 'Everything that could be checked is current. The rest is checked again when it can be reached.',
+            unknownDescription: "Some update information is unavailable or cached. See the affected rows for details.",
             offlineDescription: 'Everything reachable is current. Offline machines are checked when they’re back.',
         },
         settingsSubtitle: {
@@ -9466,6 +9536,9 @@ settingsSession: {
             appCheckFailed: 'Couldn’t check for a newer version.',
             appDownloadFailed: 'The download didn’t finish.',
             appInstallFailed: 'The update couldn’t be installed.',
+            cachedRelease: 'Cached release information; not refreshed here',
+            cachedReleaseChannel: ({ channel }: { channel: string }) => `Cached ${channel} release information; not refreshed here`,
+            manualUpdateInterruptsSessions: 'Update on this machine. Services may stop and running sessions may end.',
             latestUnknown: 'Couldn’t check for a newer version',
             rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} didn’t start on this machine, so it’s still on ${kept}.`,
             installedByYou: 'Installed by you',
@@ -9717,6 +9790,7 @@ settingsSession: {
         failedToConnectTerminal: 'Failed to connect terminal',
         cameraPermissionsRequiredToConnectTerminal: 'Camera permissions are required to connect terminal',
         failedToLinkDevice: 'Failed to link device',
+        deviceLinkRequestNotFound: "No pending linking request was found on this relay. Check that both devices use the same relay, then generate a new QR code.",
         cameraPermissionsRequiredToScanQr: 'Camera permissions are required to scan QR codes',
         qrScannerUnavailable: 'Unable to open the QR scanner. Please try again or enter the URL manually.'
     },

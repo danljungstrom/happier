@@ -18,6 +18,7 @@ import {
 import { inferAgentIdFromSessionMetadata } from '@happier-dev/agents';
 import { configuration } from '@/configuration';
 import type { RawJSONLines } from '@/backends/claude/types';
+import { persistClaudeToolResultMedia } from '@/backends/claude/attachments/persistClaudeToolResultMedia';
 import {
     buildClaudeJsonlLocalId,
     buildClaudeJsonlLocalIdFromMessageKey,
@@ -57,7 +58,7 @@ import {
 import { createExecutionRunBackend } from '@/agent/executionRuns/runtime/createExecutionRunBackend';
 import { CodexLikePermissionHandler } from '@/agent/permissions/CodexLikePermissionHandler';
 import type { PermissionRequestPushSender } from '@/agent/permissions/BasePermissionHandler';
-import { SessionPermissionRpcRouter } from '@/agent/permissions/sessionPermissionRpcRouter';
+import { getOrCreateSessionPermissionRpcRouter, type SessionPermissionRpcRouter } from '@/agent/permissions/sessionPermissionRpcRouter';
 import { ExecutionBudgetRegistry } from '@/daemon/executionBudget/ExecutionBudgetRegistry';
 import { readCredentials, readAccountChangesCursor } from '@/persistence';
 import { RPC_METHODS } from '@happier-dev/protocol/rpc';
@@ -67,7 +68,7 @@ import {
     bootstrapAccountSettingsContext,
     refreshActiveAccountSettingsFromServer,
 } from '@/settings/accountSettings/bootstrapAccountSettingsContext';
-import { AccountSettingsV2GetResponseSchema } from '@happier-dev/protocol';
+import { AccountSettingsV2GetResponseSchema, readClaudePeerMessage } from '@happier-dev/protocol';
 import {
     getActiveAccountSettingsSnapshot,
     subscribeActiveAccountSettingsSnapshot,
@@ -321,6 +322,7 @@ import {
     createTranscriptMessageAppendMutation,
 } from './mutations/sessionMutationTypes';
 import { createSessionTurnLifecycle } from '@/agent/runtime/session/turn/lifecycle';
+import { createSessionUsageLimitRecoveryRuntime } from '@/session/usageLimitRecoveryControls/createSessionUsageLimitRecoveryRuntime';
 import { observeAcpLifecycleMarker } from '@/agent/runtime/session/turn/lifecycleMarkerAdapter';
 import type { SessionTurnLifecycleControllerWithActiveTurnWitness } from '@/agent/runtime/session/turn/types';
 import { createSessionTurnMutationWriter } from '@/agent/runtime/session/turn/writer';
@@ -602,7 +604,6 @@ export class ApiSessionClient extends EventEmitter {
     private readonly bufferedPendingMessageDeliveryInfoByLocalId = new Map<string, SessionUserMessageDeliveryInfo>();
     private pendingMessageCallback: ((message: UserMessage, info?: SessionUserMessageDeliveryInfo) => unknown | Promise<unknown>) | null = null;
     readonly rpcHandlerManager: RpcHandlerManager;
-    private sessionPermissionRpcRouter: SessionPermissionRpcRouter | null = null;
     private executionRunPermissionHandler: CodexLikePermissionHandler | null = null;
     private readonly rpcLifecycleRegistrations: RpcLifecycleRegistration[] = [];
     private executionRunLifecycleRegistration: RpcLifecycleRegistration | null = null;
@@ -759,6 +760,8 @@ export class ApiSessionClient extends EventEmitter {
     private readonly runtimeActivitySnapshotPublisher: RuntimeActivitySnapshotSessionMutationPublisher;
     readonly sessionTurnLifecycle: SessionTurnLifecycleControllerWithActiveTurnWitness;
     private readonly sessionRuntimeControls: Partial<SessionRuntimeControls> = {};
+    private usageLimitRecoveryRuntime: ReturnType<typeof createSessionUsageLimitRecoveryRuntime> | null = null;
+    private providerUsageLimitRecoveryCheckNow: SessionRuntimeControls['checkUsageLimitRecoveryNow'];
     private readonly baseSessionRuntimeControls: Partial<SessionRuntimeControls> = {};
     private readonly sessionRuntimeControlRegistrations = new Set<Partial<SessionRuntimeControls>>();
     private providerOwnedUserMessageEchoClassifier: ProviderOwnedUserMessageEchoClassifier | null = null;
@@ -1046,6 +1049,16 @@ export class ApiSessionClient extends EventEmitter {
         });
         const parentProvider = resolveSessionCatalogAgentId(this.metadata);
 
+        this.usageLimitRecoveryRuntime = createSessionUsageLimitRecoveryRuntime({
+            sessionId: this.sessionId,
+            getMetadata: () => this.getMetadataSnapshot(),
+            updateMetadata: async (update) => { await this.updateMetadata(update); },
+            getCredentials: async () => {
+                const credentials = await readCredentials();
+                return credentials?.token === this.token ? credentials : null;
+            },
+            getAccountSettings: () => getActiveAccountSettingsSnapshot()?.settings ?? null,
+        });
         this.rebuildSessionRuntimeControls();
         this.rpcLifecycleRegistrations.push(registerSessionHandlers(this.rpcHandlerManager, this.metadata?.path, {
             getSessionMetadata: () => this.getMetadataSnapshot(),
@@ -1232,11 +1245,20 @@ export class ApiSessionClient extends EventEmitter {
         this.sessionTurnLifecycle = createSessionTurnLifecycle({
             sessionId: this.sessionId,
             enqueueSessionTurn: createSessionTurnMutationWriter(this.sessionMutationOutbox).enqueueSessionTurn,
+            onTurnFailure: (issue) => {
+                const recovery = this.usageLimitRecoveryRuntime;
+                if (recovery) void recovery.observeFailure(issue).catch(recovery.reportError);
+            },
             onTurnLifecycleEvent: (event, terminalStatus, turnId) => {
+                if (event !== 'assistant_message_end' || terminalStatus !== 'failed') {
+                    const recovery = this.usageLimitRecoveryRuntime;
+                    if (recovery) void recovery.observeSupersession().catch(recovery.reportError);
+                }
                 this.observeTurnLifecycleForPendingDrain(event, terminalStatus);
                 void this.notifyDaemonConnectedServiceTurnLifecycle(event, terminalStatus, turnId);
             },
         });
+        void this.usageLimitRecoveryRuntime.restore().catch(this.usageLimitRecoveryRuntime.reportError);
 
         //
         // Handlers
@@ -1476,6 +1498,8 @@ export class ApiSessionClient extends EventEmitter {
         for (const registration of this.sessionRuntimeControlRegistrations) {
             copyCallableSessionRuntimeControls(this.sessionRuntimeControls, registration);
         }
+        this.providerUsageLimitRecoveryCheckNow = this.sessionRuntimeControls.checkUsageLimitRecoveryNow;
+        copyCallableSessionRuntimeControls(this.sessionRuntimeControls, this.usageLimitRecoveryRuntime?.controls);
         this.sessionRuntimeControls.wakePendingMaterialization = () => this.wakePendingMaterialization();
         this.sessionRuntimeControls.isPendingMaterializationAvailable = () => (
             !this.closed && !this.runtimeTerminationStarted
@@ -2495,37 +2519,11 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     private resolveUsageLimitRecoveryCheckNow(): SessionRuntimeControls['checkUsageLimitRecoveryNow'] {
-        const recovery = SessionUsageLimitRecoveryV1Schema.safeParse(
-            this.metadata?.[SESSION_USAGE_LIMIT_RECOVERY_METADATA_KEY],
-        );
-        const providerCheck = this.sessionRuntimeControls.checkUsageLimitRecoveryNow;
-        if (!recovery.success || !recovery.data.runtimeAuthRecoveryAttemptId) return providerCheck;
-
-        // The durable attempt owns reset checks for active and inactive sessions alike.
-        // Provider-only actions retain their existing owner; a failed daemon check
-        // must not fall back to a second scheduler or resume the provider locally.
+        const coreCheck = this.sessionRuntimeControls.checkUsageLimitRecoveryNow;
+        const providerCheck = this.providerUsageLimitRecoveryCheckNow;
         return async (request) => {
-            if (request.operation && request.operation !== 'check_now') {
-                return providerCheck
-                    ? await providerCheck(request)
-                    : { ok: false, errorCode: 'unsupported_session_runtime_method' };
-            }
-            if (request.sessionId !== this.sessionId) return { ok: false, errorCode: 'invalid_input' };
-            const unavailable = { ok: false, errorCode: 'session_usage_limit_recovery_control_remote_unavailable' };
-            try {
-                const credentials = await readCredentials();
-                const machineId = this.metadata?.machineId?.trim();
-                if (!credentials || credentials.token !== this.token || !machineId) return unavailable;
-                return await callMachineRpc({
-                    credentials,
-                    machineId,
-                    method: RPC_METHODS.DAEMON_SESSION_USAGE_LIMIT_CHECK_NOW,
-                    request,
-                    authorization: { kind: 'session.write', sessionId: this.sessionId },
-                });
-            } catch {
-                return unavailable;
-            }
+            const check = request.operation && request.operation !== 'check_now' ? providerCheck ?? coreCheck : coreCheck;
+            return check ? await check(request) : { ok: false, errorCode: 'unsupported_session_runtime_method' };
         };
     }
 
@@ -2544,6 +2542,12 @@ export class ApiSessionClient extends EventEmitter {
                 // Explicit input belongs in Pending before the daemon can decide
                 // whether an automatic continuation still has work to resume.
                 // Waking recovery here can enqueue old work and reject the new input.
+                return { status: 'ready' };
+            }
+            if (this.sessionRuntimeControls.checkUsageLimitRecoveryNow
+                === this.usageLimitRecoveryRuntime?.controls.checkUsageLimitRecoveryNow) {
+                // Explicit input takes ordinary Pending custody before an automatic
+                // continuation can compete with it; readiness checks never replay old work here.
                 return { status: 'ready' };
             }
             const checkNow = this.resolveUsageLimitRecoveryCheckNow();
@@ -4130,11 +4134,14 @@ export class ApiSessionClient extends EventEmitter {
             : await request();
     }
 
-    private prepareClaudeSessionMessage(body: RawJSONLines, meta?: Record<string, unknown>): {
+    private async prepareClaudeSessionMessage(body: RawJSONLines, meta?: Record<string, unknown>): Promise<{
         content: MessageContent;
         localId: string;
         sidechainId: string | null;
-    } {
+    }> {
+        ({ body, meta } = await persistClaudeToolResultMedia({
+            body, meta, workingDirectory: this.resolveWorkingDirectory(), sessionId: this.sessionId,
+        }));
         this.outboundShapeLogger.log('claude:raw-jsonl', body);
 
         const sidechainId = (() => {
@@ -4149,7 +4156,9 @@ export class ApiSessionClient extends EventEmitter {
             body.type === 'user' &&
             typeof body.message.content === 'string' &&
             body.isSidechain !== true &&
-            body.isMeta !== true
+            body.isMeta !== true &&
+            // Peer deliveries keep their sender provenance in the raw output envelope.
+            !readClaudePeerMessage(body)
         ) {
             content = this.buildUserTextMessageContent(body.message.content, meta);
         } else {
@@ -4213,23 +4222,23 @@ export class ApiSessionClient extends EventEmitter {
         if (isToolTraceEnabled()) {
             recordClaudeToolTraceEvents({ sessionId: this.sessionId, body });
         }
-        const { content, localId, sidechainId } = this.prepareClaudeSessionMessage(body, meta);
-
-        this.logSendWhileDisconnected('Claude session message', { type: body.type });
-
-        const payload = this.buildOutboundSessionMessagePayload(content);
-        this.observeTurnAssistantTextFromSessionContent(content, {
-            source: 'ephemeral',
-            localId,
-            sidechainId,
-            provider: 'claude',
-        });
-        this.commitSessionMessageBestEffort({
-            message: payload,
-            localId,
-            sidechainId,
-            messageRole: resolveClaudeSessionMessageRole(body),
-            logErrorMessage: '[SOCKET] Failed to commit Claude session message (non-fatal)',
+        const localId = buildClaudeJsonlLocalId(body);
+        void this.enqueueMessageCommit('best-effort', {
+            operation: 'claude-message-commit', details: { localId, messageType: body.type },
+        }, async () => {
+            const { content, sidechainId } = await this.prepareClaudeSessionMessage(body, meta);
+            this.logSendWhileDisconnected('Claude session message', { type: body.type });
+            this.observeTurnAssistantTextFromSessionContent(content, {
+                source: 'ephemeral', localId, sidechainId, provider: 'claude',
+            });
+            return this.commitSessionMessage({
+                message: this.buildOutboundSessionMessagePayload(content), localId, sidechainId,
+                messageRole: resolveClaudeSessionMessageRole(body), requireCommit: false,
+            });
+        }).catch((error) => {
+            logger.debug('[SOCKET] Failed to commit Claude session message (non-fatal)', {
+                localId, error: serializeAxiosErrorForLog(error),
+            });
         });
 
         this.applyClaudeSessionMessageAuxiliaryEffects(body);
@@ -4242,36 +4251,23 @@ export class ApiSessionClient extends EventEmitter {
         if (isToolTraceEnabled()) {
             recordClaudeToolTraceEvents({ sessionId: this.sessionId, body });
         }
-        const { content, localId, sidechainId } = this.prepareClaudeSessionMessage(body, meta);
+        const localId = buildClaudeJsonlLocalId(body);
         requireExactCommitLocalId(localId);
-
-        this.logSendWhileDisconnected('Claude session message', { type: body.type });
-        const commitResult = await this.enqueueMessageCommit('required', {
+        await this.enqueueMessageCommit('required', {
             operation: 'claude-message-exact-commit',
-            details: {
-                localId,
-                messageType: body.type,
-                requireCommit: true,
-                connectionEpoch: this.userSocketSettingsConnectionEpoch,
-            },
-        }, () =>
-            this.commitSessionMessage({
-                message: this.buildOutboundSessionMessagePayload(content),
-                localId,
-                sidechainId,
-                messageRole: resolveClaudeSessionMessageRole(body),
-                requireCommit: true,
-                requireWriteDisposition: true,
-            }),
-        );
-        this.observeTurnAssistantTextFromSessionContent(content, {
-            source: 'committed',
-            seq: commitResult?.seq ?? null,
-            localId,
-            sidechainId,
-            provider: 'claude',
+            details: { localId, messageType: body.type, requireCommit: true, connectionEpoch: this.userSocketSettingsConnectionEpoch },
+        }, async () => {
+            const { content, sidechainId } = await this.prepareClaudeSessionMessage(body, meta);
+            this.logSendWhileDisconnected('Claude session message', { type: body.type });
+            const commitResult = await this.commitSessionMessage({
+                message: this.buildOutboundSessionMessagePayload(content), localId, sidechainId,
+                messageRole: resolveClaudeSessionMessageRole(body), requireCommit: true, requireWriteDisposition: true,
+            });
+            this.observeTurnAssistantTextFromSessionContent(content, {
+                source: 'committed', seq: commitResult?.seq ?? null, localId, sidechainId, provider: 'claude',
+            });
+            this.applyClaudeSessionMessageAuxiliaryEffects(body);
         });
-        this.applyClaudeSessionMessageAuxiliaryEffects(body);
     }
 
     async sendClaudeSessionMessageCommitted(
@@ -4283,7 +4279,7 @@ export class ApiSessionClient extends EventEmitter {
             meta?: Record<string, unknown>;
         }>,
     ): Promise<Readonly<{ persisted: boolean; delivered: boolean }>> {
-        const { content, localId, sidechainId } = this.prepareClaudeSessionMessage(body, opts.meta);
+        const { content, localId, sidechainId } = await this.prepareClaudeSessionMessage(body, opts.meta);
         requireExactCommitLocalId(localId);
 
         this.logSendWhileDisconnected('Claude session message', { type: body.type });
@@ -4469,7 +4465,7 @@ export class ApiSessionClient extends EventEmitter {
     /**
      * Send a generic agent message to the session using ACP (Agent Communication Protocol) format.
      * Works for any agent type (Gemini, Codex, Claude, etc.) - CLI normalizes to unified ACP format.
-     * 
+     *
      * @param provider - The agent provider sending the message (e.g., 'gemini', 'codex', 'claude')
      * @param body - The message payload (type: 'message' | 'reasoning' | 'tool-call' | 'tool-result')
      */
@@ -6014,10 +6010,7 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     getOrCreatePermissionRpcRouter(): SessionPermissionRpcRouter {
-        if (!this.sessionPermissionRpcRouter) {
-            this.sessionPermissionRpcRouter = new SessionPermissionRpcRouter(this.rpcHandlerManager);
-        }
-        return this.sessionPermissionRpcRouter;
+        return getOrCreateSessionPermissionRpcRouter(this.rpcHandlerManager);
     }
 
     getLastObservedUserMessageSeq(): number {
@@ -6037,6 +6030,7 @@ export class ApiSessionClient extends EventEmitter {
 
     async close() {
         logger.debug('[API] socket.close() called');
+        this.sessionTurnLifecycle.dispose();
         this.startExecutionRunDisposal();
         this.executionRunPermissionHandler?.reset();
         this.executionRunPermissionHandler = null;
@@ -6046,6 +6040,7 @@ export class ApiSessionClient extends EventEmitter {
         // Disposing only stops future retry timers; it never cancels a commit already in flight,
         // which the drain below still settles.
         this.sessionMessageCommitRetry.dispose();
+        this.usageLimitRecoveryRuntime?.dispose();
         if (this.startupMessageCatchUpRetryTimer) {
             clearTimeout(this.startupMessageCatchUpRetryTimer);
             this.startupMessageCatchUpRetryTimer = null;

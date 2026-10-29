@@ -1,19 +1,20 @@
 import { z } from 'zod';
+import { lazySchema } from '../lazySchema.js';
 
-export const BackendTargetKindSchema = z.enum(['builtInAgent', 'configuredAcpBackend']);
+export const BackendTargetKindSchema = lazySchema(() => z.enum(['builtInAgent', 'configuredAcpBackend']));
 export type BackendTargetKind = z.infer<typeof BackendTargetKindSchema>;
 
-const BuiltInAgentTargetSchema = z.object({
+const BuiltInAgentTargetSchema = lazySchema(() => z.object({
   kind: z.literal('builtInAgent'),
   agentId: z.string().min(1),
-});
+}));
 
-const ConfiguredAcpBackendTargetSchema = z.object({
+const ConfiguredAcpBackendTargetSchema = lazySchema(() => z.object({
   kind: z.literal('configuredAcpBackend'),
   backendId: z.string().min(1),
-});
+}));
 
-export const BackendTargetRefSchema = z.union([BuiltInAgentTargetSchema, ConfiguredAcpBackendTargetSchema]);
+export const BackendTargetRefSchema = lazySchema(() => z.union([BuiltInAgentTargetSchema, ConfiguredAcpBackendTargetSchema]));
 export type BackendTargetRefV1 = z.infer<typeof BackendTargetRefSchema>;
 
 /** The 0.2 catalog placeholder identifies transport; a configured target keeps its own reference. */
@@ -21,7 +22,7 @@ export function matchesBackendTargetAgentId(target: BackendTargetRefV1, agentId:
   return agentId === (target.kind === 'builtInAgent' ? target.agentId : 'customAcp');
 }
 
-export const BackendTargetKeySchema = z.string().regex(/^(agent|acpBackend):.+$/, 'Invalid backend target key');
+export const BackendTargetKeySchema = lazySchema(() => z.string().regex(/^(agent|acpBackend):.+$/, 'Invalid backend target key'));
 export type BackendTargetKey = z.infer<typeof BackendTargetKeySchema>;
 
 export function buildBackendTargetKey(target: BackendTargetRefV1): BackendTargetKey {

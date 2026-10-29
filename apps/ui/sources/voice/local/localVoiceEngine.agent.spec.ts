@@ -15,7 +15,7 @@ import {
     registerLocalVoiceEngineHarnessHooks,
     resolveRuntimeFeatureDecision,
     routerNavigate,
-    sessionRpcWithServerScope,
+    sessionRpc,
     setActiveServerAndSwitch,
     sessionExecutionRunStart,
     sendSessionMessageWithServerScope,
@@ -450,6 +450,7 @@ describe('local voice engine agent behavior', () => {
     });
 
     it('agent mode can answer structured user-action requests through the shared voice tool handlers', async () => {
+        sessionRpc.mockResolvedValue({ ok: true });
         useVoiceTargetStore.getState().setPrimaryActionSessionId('s1');
 
         const storage = await getStorage();
@@ -541,11 +542,11 @@ describe('local voice engine agent behavior', () => {
         await toggleLocalVoiceTurn(VOICE_AGENT_GLOBAL_SESSION_ID);
         await toggleLocalVoiceTurn(VOICE_AGENT_GLOBAL_SESSION_ID);
 
-        expect(sessionRpcWithServerScope).toHaveBeenCalledWith({
-            sessionId: 's1',
-            method: 'permission',
-            payload: { id: 'req_question', approved: true, answers: { 'Continue?': 'Yes' } },
-        });
+        expect(sessionRpc).toHaveBeenCalledWith(
+            's1', 'permission',
+            { id: 'req_question', approved: true, answers: { 'Continue?': 'Yes' } },
+            expect.any(Object),
+        );
 
         const chatCalls = (globalThis.fetch as any).mock.calls.filter((call: any[]) => String(call?.[0] ?? '').includes('/chat/completions'));
         const toolResultsCarrier = chatCalls

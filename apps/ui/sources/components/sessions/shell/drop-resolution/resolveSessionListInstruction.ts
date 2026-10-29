@@ -31,7 +31,6 @@ export function resolveSessionListDragEligibilityBlock(params: Readonly<{
     });
     if (eligibility.reason === 'eligible') return null;
     if (eligibility.reason === 'feature-disabled') return 'feature-disabled';
-    if (eligibility.reason === 'direct-session') return 'direct-session';
     return 'unsupported-item';
 }
 

@@ -67,24 +67,6 @@ describe('executeSessionBulkAction', () => {
         expect(observed).toEqual([original.id, original.id]);
     });
 
-    it('skips folder-ineligible sessions while moving eligible sessions', async () => {
-        const assigned: string[] = [];
-        const result = await executeSessionBulkAction({
-            action: { id: SESSION_BULK_ACTION_IDS.moveToFolder, folderId: 'folder-a' },
-            targets: [
-                target({ key: 'persisted', sessionId: 'persisted', canMoveToFolder: true }),
-                target({ key: 'direct', sessionId: 'direct', canMoveToFolder: false }),
-            ],
-            context: {
-                foldersFeatureDecision: { state: 'enabled' },
-                setSessionFolderAssignment: async ({ target }) => { assigned.push(target.sessionId); },
-            },
-        });
-        expect(assigned).toEqual(['persisted']);
-        expect(result.skipped.map((entry) => entry.target.key)).toEqual(['direct']);
-        expect(result.remainingSelectedKeys).toEqual(['direct']);
-    });
-
     it('treats empty target selections as a no-op for every bulk action', async () => {
         const actions: SessionBulkActionRequest[] = [
             { id: SESSION_BULK_ACTION_IDS.stop },

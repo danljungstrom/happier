@@ -13,6 +13,7 @@ import { authenticateAndStartDaemon } from '../../src/testkit/uiE2e/authenticate
 import { gotoDomContentLoadedWithRetries, normalizeLoopbackBaseUrl } from '../../src/testkit/uiE2e/pageNavigation';
 import { waitForInitialAppUi } from '../../src/testkit/uiE2e/waitForInitialAppUi';
 import { visibleNewSessionComposer } from '../../src/testkit/uiE2e/createSessionFromNewSessionComposer';
+import { appendBrowserDiagnostics, collectBrowserDiagnostics } from '../../src/testkit/uiE2e/browserDiagnostics';
 
 const run = createRunDirs({ runLabel: 'ui-e2e' });
 
@@ -655,6 +656,35 @@ test.describe('ui e2e: session composer draft continuity', () => {
             await expect(firstComposer).toHaveValue('');
         } finally {
             await second.context.close();
+        }
+    });
+
+    test('removes a deleted new-session draft from another mounted composer and its sidebar', async ({ page, browser }) => {
+        test.setTimeout(180_000);
+        if (!server || !token || !uiBaseUrl) throw new Error('missing synchronized draft fixtures');
+
+        const seed = `delete shared draft ${run.runId}`;
+        const clientA = await openNewSessionDraft({ page, uiBaseUrl });
+        const address = { kind: 'newSession' as const, draftId: clientA.draftId };
+        await fillAndFlushDraft({ composer: clientA.composer, value: seed, baseUrl: server.baseUrl, token, address });
+        const clientB = await openSecondContext({ browser, sourcePage: page, uiBaseUrl, draftId: clientA.draftId, expectedText: seed });
+        const diagnostics = collectBrowserDiagnostics({ page: clientB.page });
+        try {
+            await expect(clientB.composer).toHaveValue(seed, { timeout: 60_000 });
+            await gotoDomContentLoadedWithRetries(page, `${uiBaseUrl}/?happier_hmr=0`, 120_000);
+            await page.getByTestId(`session-draft-delete:new-session:${clientA.draftId}`).click();
+            await page.getByTestId('web-modal-confirm').click();
+            await expect.poll(async () => (await readDraft({ baseUrl: server!.baseUrl, token: token!, address })).status,
+                { timeout: 60_000 }).toBe('deleted');
+            await expect(clientB.composer).toHaveValue('', { timeout: 60_000 });
+
+            await gotoDomContentLoadedWithRetries(clientB.page, `${uiBaseUrl}/?happier_hmr=0`, 120_000);
+            await expect(clientB.page.getByTestId(`session-draft-row:new-session:${clientA.draftId}`)).toHaveCount(0);
+            expect((await readDraft({ baseUrl: server.baseUrl, token, address })).status).toBe('deleted');
+        } catch (error) {
+            throw appendBrowserDiagnostics(error, diagnostics());
+        } finally {
+            await clientB.context.close();
         }
     });
 

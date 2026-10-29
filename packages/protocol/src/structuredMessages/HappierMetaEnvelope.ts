@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lazySchema } from '../lazySchema.js';
 
 /**
  * Message-level structured meta payload envelope stored under `message.meta.happier`.
@@ -12,7 +13,7 @@ export function createHappierMetaEnvelopeSchema(zod: typeof z) {
   });
 }
 
-export const HappierMetaEnvelopeSchema = createHappierMetaEnvelopeSchema(z);
+export const HappierMetaEnvelopeSchema = lazySchema(() => createHappierMetaEnvelopeSchema(z));
 
 export type HappierMetaEnvelope = z.infer<typeof HappierMetaEnvelopeSchema>;
 

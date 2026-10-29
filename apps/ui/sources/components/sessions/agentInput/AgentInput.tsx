@@ -145,6 +145,7 @@ import type {
     AgentInputStatusBadge as AgentInputStatusBadgeDescriptor,
 } from './agentInputContracts';
 import type { AgentInputSendIntentOptions, AgentInputSendOptions } from './agentInputSendOptions';
+import type { MessageSendMode } from '@/sync/domains/session/control/submitMode';
 import { APPLIED_RUNTIME_MARKER_ICON, resolveAppliedRuntimeStatus } from './appliedRuntimeMarker';
 import { resolveArmedComposerContinuation } from './components/agentContinuationSubmitPresentation';
 import { AgentInputStatusBadge } from './status/AgentInputStatusBadge';
@@ -166,6 +167,7 @@ import {
     resolveComposerEnterAction,
     resolveComposerEscapeAction,
     resolveComposerSendShortcutAction,
+    buildComposerSendShortcutLabels,
     shouldRunComposerModeCycleShortcut,
 } from '@/keyboard/composer';
 import { useKeyboardShortcutHandlers } from '@/keyboard/KeyboardShortcutProvider';
@@ -253,6 +255,9 @@ interface AgentInputProps {
     onChangeText: (text: string) => void;
     sessionId?: string;
     onSend: (options?: AgentInputSendOptions) => void;
+    sendMenuModes?: readonly MessageSendMode[];
+    alternateSendMode?: MessageSendMode;
+    canSendNextQueued?: boolean;
     submitAccessibilityLabel?: string;
     sendIcon?: React.ReactNode;
     onMicPress?: () => void;
@@ -649,9 +654,9 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         paddingBottom: AGENT_INPUT_PANEL_PADDING_BOTTOM,
         paddingHorizontal: 8,
     },
-    // Opt-in "glass" composer: the Liquid Glass tab bar's solid look — `surface.base`
-    // fill, the glass rim, and a top inset shadow. Fully redefines the border so the
-    // standard hairline + highlight don't leak through. The cast shadow lives on the
+    // Opt-in "glass" composer: the themed glass fill, rim, and a top inset shadow.
+    // Fully redefines the border so the standard hairline + highlight don't leak
+    // through. The cast shadow lives on the
     // `panelShadow` wrapper (glass mode only).
     unifiedPanelGlass: {
         backgroundColor: theme.colors.glass.composerSurface,
@@ -1234,6 +1239,11 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     const liveTextStatusRef = React.useRef(liveTextStatus);
     const hasText = liveTextStatus.hasText;
     const hasSendableContent = hasText || props.hasSendableAttachments === true;
+    const sendMenuShortcuts = React.useMemo(() => buildComposerSendShortcutLabels({
+        alternateMode: props.alternateSendMode ?? 'agent_queue', keyboardShortcutsV2Enabled,
+        keyboardSingleKeyShortcutsEnabled, keyboardShortcutOverridesV1, keyboardShortcutDisabledCommandIdsV1,
+        platformOS: Platform.OS,
+    }), [props.alternateSendMode, keyboardShortcutsV2Enabled, keyboardSingleKeyShortcutsEnabled, keyboardShortcutOverridesV1, keyboardShortcutDisabledCommandIdsV1]);
     const micPressHandler = voiceEnabled ? props.onMicPress : undefined;
     const micActive = voiceEnabled && props.isMicActive === true;
     const [fileDragActive, setFileDragActive] = React.useState(false);
@@ -2531,8 +2541,8 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     // Fade the chip rows out to the composer's own fill: the glass surface in glass
     // mode, the standard input background otherwise.
     const actionBarFadeColor = React.useMemo(() => {
-        return isGlassComposer ? theme.colors.surface.base : theme.colors.input.background;
-    }, [isGlassComposer, theme.colors.surface.base, theme.colors.input.background]);
+        return isGlassComposer ? theme.colors.glass.composerSurface : theme.colors.input.background;
+    }, [isGlassComposer, theme.colors.glass.composerSurface, theme.colors.input.background]);
 
     // Handle abort button press
     const handleAbortPress = React.useCallback(async () => {
@@ -2745,24 +2755,28 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     // Handle keyboard navigation
     const handleKeyPress = React.useCallback((event: KeyPressEvent): boolean => {
         const eventInputText = event.inputState?.text ?? inputRef.current?.getText?.() ?? inputStateRef.current.text;
-        const hasSendableInput = resolveLiveInputTextStatus(eventInputText).hasText || props.hasSendableAttachments === true;
+        const hasSendableInput = resolveLiveInputTextStatus(eventInputText).hasText
+            || props.hasSendableAttachments === true || props.armedContinuationTarget != null;
         const sendShortcutAction = resolveComposerSendShortcutAction(event, {
             keyboardShortcutsV2Enabled,
             keyboardSingleKeyShortcutsEnabled,
             keyboardShortcutOverridesV1,
             keyboardShortcutDisabledCommandIdsV1,
             hasSendableInput,
+            canSendNextQueued: props.canSendNextQueued,
             sendActionDisabled,
             platformOS: Platform.OS,
         });
-        if (sendShortcutAction === 'sendImmediate') {
-            // Explicit immediate-send bypasses autocomplete.
-            handleSend({ forceImmediate: true });
-            return true;
-        }
-        if (sendShortcutAction === 'sendPending') {
-            // Explicit pending-send bypasses steering so the message can be reviewed/reordered.
-            handleSend({ deliveryIntent: 'server_pending' });
+        if (sendShortcutAction) {
+            const deliveryIntent = sendShortcutAction === 'sendInterrupt' ? 'interrupt'
+                : sendShortcutAction === 'sendPending' ? 'server_pending'
+                    : hasSendableInput ? (props.alternateSendMode ?? 'agent_queue') : 'agent_queue';
+            if (!hasSendableInput) {
+                if (deliveryIntent === 'server_pending') return false;
+                props.onSend({ deliveryIntent, sendNextQueued: true });
+            } else {
+                handleSend({ deliveryIntent });
+            }
             return true;
         }
 
@@ -2799,7 +2813,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             // Shell-like history: only when suggestions are not visible and cursor is at the boundary.
             const historyInputState = resolveHistoryKeyInputState(event, inputStateRef.current);
             const isCollapsedSelection = historyInputState.selection.start === historyInputState.selection.end;
-            if (isCollapsedSelection && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+            if (!props.disabled && isCollapsedSelection && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
                 const historyBrowsing = isHistoryBrowsing();
                 if (event.key === 'ArrowUp' && (historyBrowsing || historyInputState.selection.start === 0)) {
                     const next = messageHistory.moveUp(historyInputState.text);
@@ -2845,31 +2859,34 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             }
         }
         return false; // Key was not handled
-    }, [handleCommandMenuKey, props.hasSendableAttachments, handleSend, props.onPermissionModeChange, keyboardShortcutsV2Enabled, keyboardSingleKeyShortcutsEnabled, keyboardShortcutOverridesV1, keyboardShortcutDisabledCommandIdsV1, permissionModeOrder, effectivePermissionPolicy.effectiveMode, messageHistory, applyHistoryInputText, sendActionDisabled, isHistoryBrowsing, hasRetainedHistorySession, enterToSendEnabled, canStopFromComposer, isAborting, runAbortShortcutAction]);
+    }, [handleCommandMenuKey, props.disabled, props.hasSendableAttachments, props.armedContinuationTarget, props.canSendNextQueued, props.alternateSendMode, props.onSend, handleSend, props.onPermissionModeChange, keyboardShortcutsV2Enabled, keyboardSingleKeyShortcutsEnabled, keyboardShortcutOverridesV1, keyboardShortcutDisabledCommandIdsV1, permissionModeOrder, effectivePermissionPolicy.effectiveMode, messageHistory, applyHistoryInputText, sendActionDisabled, isHistoryBrowsing, hasRetainedHistorySession, enterToSendEnabled, canStopFromComposer, isAborting, runAbortShortcutAction]);
 
     const handleSubmitEditing = React.useCallback(() => {
         if (Platform.OS === 'web') return;
         if (!enterToSendEnabled) return;
         if (sendActionDisabled) return;
-        const hasSendableInput = liveTextStatus.hasText || props.hasSendableAttachments === true;
+        const hasSendableInput = liveTextStatus.hasText || props.hasSendableAttachments === true
+            || props.armedContinuationTarget != null;
         if (!hasSendableInput) return;
         handleSend();
-    }, [enterToSendEnabled, handleSend, liveTextStatus.hasText, props.hasSendableAttachments, sendActionDisabled]);
+    }, [enterToSendEnabled, handleSend, liveTextStatus.hasText, props.hasSendableAttachments, props.armedContinuationTarget, sendActionDisabled]);
 
     const submitBehavior = React.useMemo<MultiTextInputSubmitBehavior | undefined>(() => {
         if (Platform.OS === 'web') return undefined;
         return enterToSendEnabled ? 'submit' : 'newline';
     }, [enterToSendEnabled]);
 
+    // A disabled composer keeps its attachments as submitted: drop, paste and remove all stop here.
+    const onAttachmentsAdded = props.disabled ? undefined : props.onAttachmentsAdded;
     const handlePanelFilesDropped = React.useCallback((event: any) => {
         const files = extractWebAttachmentFilesFromDataTransfer(event?.dataTransfer);
         if (files.length > 0) {
-            props.onAttachmentsAdded?.(files);
+            onAttachmentsAdded?.(files);
         }
-    }, [props.onAttachmentsAdded]);
+    }, [onAttachmentsAdded]);
 
     const panelDropZoneHandlers = useWebFileDropZone({
-        enabled: Platform.OS === 'web' && typeof props.onAttachmentsAdded === 'function',
+        enabled: Platform.OS === 'web' && typeof onAttachmentsAdded === 'function',
         onFilesDropped: handlePanelFilesDropped,
         onFileDragActiveChange: setFileDragActive,
     });
@@ -2922,7 +2939,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                 onSubmitEditing={handleSubmitEditing}
                 maxHeight={resolvedInputMaxHeight}
                 editable={!props.disabled}
-                onFilesPasted={props.onAttachmentsAdded}
+                onFilesPasted={onAttachmentsAdded}
                 onContentHeightChange={handleInputContentHeightChange}
             />
             {props.inputExpansion && shouldShowInputExpansionToggle ? (
@@ -3009,6 +3026,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             <AgentInputAttachmentsRow
                 attachments={props.attachments ?? []}
                 composerBadges={composerAttachmentBadges}
+                disabled={props.disabled === true}
             />
         );
 
@@ -3067,7 +3085,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                         testID={props.sessionId ? AGENT_INPUT_TEST_IDS.sessionSend : AGENT_INPUT_TEST_IDS.newSessionSend}
                         sessionId={props.sessionId}
                         submitAccessibilityLabel={props.submitAccessibilityLabel}
-                        disabled={Boolean(props.disabled || props.isSendDisabled || props.isSending || (!hasSendableContent && !micPressHandler && !canStopFromComposer))}
+                        disabled={Boolean(props.disabled || props.isSendDisabled || props.isSending)}
                         isSending={props.isSending}
                         isStopping={isAborting}
                         hasSendableContent={hasSendableContent}
@@ -3076,6 +3094,8 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                         micActive={micActive}
                         armedContinuationTarget={props.armedContinuationTarget ?? null}
                         onSend={handleSend}
+                        sendMenuModes={props.sendMenuModes}
+                        sendMenuShortcuts={sendMenuShortcuts}
                         onStop={handleAbortPress}
                     />
                 </View>,
@@ -3395,7 +3415,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                     }}
                     {...panelDropZoneHandlers}
                 >
-                    {fileDragActive && typeof props.onAttachmentsAdded === 'function' ? (
+                    {fileDragActive && typeof onAttachmentsAdded === 'function' ? (
                         <View
                             testID="agent-input-drop-overlay"
                             pointerEvents="none"

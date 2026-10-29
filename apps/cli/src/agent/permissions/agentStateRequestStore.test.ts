@@ -7,6 +7,7 @@ import {
 } from '@happier-dev/agents';
 import type { AgentState } from '@/api/types';
 import { AgentStateRequestStore } from './agentStateRequestStore';
+import type { PermissionRequestPushSender } from '@/settings/notifications/permissionRequestPush';
 
 class FakeSession {
     sessionId = 'session-test';
@@ -32,6 +33,54 @@ class FakeSession {
 }
 
 describe('AgentStateRequestStore', () => {
+    it('publishes opaque occurrence identity that survives republication and changes for replacement input', () => {
+        const session = new FakeSession();
+        const store = new AgentStateRequestStore({ session, logPrefix: '[Test]' });
+        const request = { requestId: 'same', toolName: 'Write', toolInput: { path: 'first' }, createdAt: 10 };
+        store.publishRequest(request);
+        const first = session.agentState.requests?.same;
+        expect(first).toHaveProperty('occurrenceId', expect.any(String));
+        store.publishRequest(request);
+        expect(session.agentState.requests?.same).toHaveProperty('occurrenceId', first?.occurrenceId);
+        store.publishRequest({ ...request, toolInput: { path: 'replacement' } });
+        expect(session.agentState.requests?.same?.occurrenceId).not.toBe(first?.occurrenceId);
+    });
+
+    it('rejects a replacement occurrence that appears while its notification response awaits settlement', async () => {
+        const session = new FakeSession();
+        const original = { tool: 'Write', arguments: { path: 'same' }, createdAt: 10, occurrenceId: 'original' };
+        session.agentState = { requests: { same: original }, completedRequests: {} };
+        let admit!: () => void;
+        session.updateAgentState = (updater) => new Promise<void>((resolve) => {
+            admit = () => { session.agentState = updater(session.agentState); resolve(); };
+        });
+        const store = new AgentStateRequestStore({ session, logPrefix: '[Test]' });
+        const completion = store.completeRequest({
+            requestId: 'same', status: 'approved', requireAck: true, expectedOccurrenceId: 'original',
+            fallback: { toolName: original.tool, toolInput: original.arguments, createdAt: original.createdAt },
+        });
+        session.agentState.requests = { same: { ...original, occurrenceId: 'replacement' } };
+        admit();
+        await expect(completion).rejects.toThrow('did not match');
+        expect(session.agentState.requests.same).toHaveProperty('occurrenceId', 'replacement');
+        expect(session.agentState.completedRequests?.same).toBeUndefined();
+    });
+
+    it('sends the published occurrence identity without including private tool arguments in notification data', async () => {
+        const session = new FakeSession();
+        const sendToAllDevicesAsync = vi.fn<PermissionRequestPushSender['sendToAllDevicesAsync']>(async () => {});
+        const store = new AgentStateRequestStore({ session, logPrefix: '[Test]',
+            pushSender: { sendToAllDevicesAsync }, getAccountSettings: () => accountSettingsParse({}),
+        });
+        store.publishRequest({ requestId: 'notification', toolName: 'Write',
+            toolInput: { path: '/private/path', content: 'private content' }, createdAt: Date.now() });
+        await vi.waitFor(() => expect(sendToAllDevicesAsync).toHaveBeenCalledTimes(1));
+        const data = sendToAllDevicesAsync.mock.calls[0]?.[2];
+        expect(data).toMatchObject({ requestId: 'notification', occurrenceId: session.agentState.requests?.notification?.occurrenceId });
+        expect(JSON.stringify(data)).not.toContain('private');
+        store.dispose();
+    });
+
     it.each(['claimed', 'replacement', 'missing'] as const)('rejects a %s occurrence before settlement admission', async (change) => {
         const session = new FakeSession();
         const request = { tool: 'Write', arguments: { path: '/workspace/original' }, createdAt: 10 };

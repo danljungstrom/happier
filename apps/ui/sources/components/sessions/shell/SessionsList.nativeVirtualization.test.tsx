@@ -3474,6 +3474,29 @@ describe('SessionsList (native virtualization)', () => {
         expect(readMachineTargetForSessionMock).toHaveBeenCalledWith('sess_b');
     });
 
+    it.each([true, false])('offers project folder creation only when its handler is available (%s)', async (enabled) => {
+        platformOs = 'ios';
+        const { ProjectGroupHeader } = await import('./ProjectGroupHeader');
+        const screen = await renderScreen(
+            <ProjectGroupHeader
+                item={{
+                    type: 'header', title: '/repo', headerKind: 'project', workspaceKey: 'wl_repo',
+                    workspaceScopeHint: { serverId: 'server_a', machineId: 'machine-target', rootPath: '/repo' },
+                }}
+                hasMultipleMachines={false}
+                onRenameWorkspace={vi.fn()}
+                onResetWorkspaceName={vi.fn()}
+                onCreateSession={vi.fn()}
+                onAddFolder={enabled ? vi.fn() : undefined}
+                collapsed={false}
+                onToggleCollapse={vi.fn()}
+                headerTestId="project-header"
+            />,
+        );
+        const menu = screen.root.findByType('DropdownMenu');
+        expect(menu.props.items.find((item: { id: string }) => item.id === 'add-folder')?.disabled).toBe(!enabled);
+    });
+
     it('shows project chevrons only on hover unless the group is collapsed, while keeping the add action visible', async () => {
         platformOs = 'web';
         const { ProjectGroupHeader } = await import('./SessionsList');
@@ -3495,7 +3518,6 @@ describe('SessionsList (native virtualization)', () => {
                     serverName: 'Server A',
                 } as any}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}
@@ -3554,7 +3576,6 @@ describe('SessionsList (native virtualization)', () => {
                     serverName: 'Server A',
                 } as any}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}
@@ -3589,7 +3610,6 @@ describe('SessionsList (native virtualization)', () => {
                     serverName: 'Server A',
                 } as any}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}
@@ -3629,7 +3649,6 @@ describe('SessionsList (native virtualization)', () => {
                     },
                 } as any}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 workspaceFaviconsEnabled={true}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
@@ -3698,7 +3717,6 @@ describe('SessionsList (native virtualization)', () => {
                     },
                 } as any}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}
@@ -3940,7 +3958,6 @@ describe('SessionsList (native virtualization)', () => {
             <ProjectGroupHeader
                 item={projectHeaderItem}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}
@@ -3995,7 +4012,6 @@ describe('SessionsList (native virtualization)', () => {
             <ProjectGroupHeader
                 item={projectHeaderItem}
                 hasMultipleMachines={false}
-                workspaceLabelsV1={{}}
                 onRenameWorkspace={vi.fn()}
                 onResetWorkspaceName={vi.fn()}
                 onCreateSession={vi.fn()}

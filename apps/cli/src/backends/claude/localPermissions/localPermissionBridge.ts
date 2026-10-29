@@ -696,6 +696,8 @@ export class ClaudeLocalPermissionBridge {
         if (!requestId) {
             return false;
         }
+        if (payload.occurrenceId !== undefined
+            && !this.permissionCoordinator.getResponseContext(requestId, payload.occurrenceId)) return false;
 
         const pending = this.pendingRequests.get(requestId);
         if (pending && this.isProviderHookExpired(pending)) {
@@ -718,7 +720,7 @@ export class ClaudeLocalPermissionBridge {
 
         const hasStructuredAnswers = payload.answers !== undefined || payload.structuredAnswersV1 !== undefined;
         const structuredContext = hasStructuredAnswers
-            ? this.permissionCoordinator.getLocallyOwnedLiveResponseContext(requestId)
+            ? this.permissionCoordinator.getLocallyOwnedLiveResponseContext(requestId, payload.occurrenceId)
             : null;
         const isAskUserQuestion = isAskUserQuestionToolName(pending?.toolName);
         if (hasStructuredAnswers && (!pending || !structuredContext || !isAskUserQuestion)) return false;
@@ -758,6 +760,7 @@ export class ClaudeLocalPermissionBridge {
         });
         const handled = await this.permissionCoordinator.completeRpcResponse({
             context,
+            expectedOccurrenceId: payload.occurrenceId,
             completion: {
                 result: hookResponse,
                 completedRequest: {

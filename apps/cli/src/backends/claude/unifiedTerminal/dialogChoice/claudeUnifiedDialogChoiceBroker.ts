@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { logger } from '@/ui/logger';
 import { deepEqual } from '@/utils/deterministicJson';
-import { isAskUserQuestionToolName, type StructuredQuestionLike, type StructuredQuestionAnswersV1 } from '@happier-dev/protocol';
+import { extractShellCommand, isAskUserQuestionToolName, type StructuredQuestionLike, type StructuredQuestionAnswersV1 } from '@happier-dev/protocol';
 import { normalizeLegacyStructuredQuestionAnswers, normalizeStructuredQuestionAnswersV1 } from '@/agent/questions/normalizeStructuredQuestionAnswersV1';
 import { normalizeClaudeAskUserQuestionInputForPublication } from '../../utils/normalizeClaudeAskUserQuestionInput';
 import { buildNativeAskUserQuestionAnswersForClaude } from '../../utils/askUserQuestionAnswersForClaude';
@@ -82,10 +82,13 @@ type NativePrompt = Readonly<{
   occurrenceId: string;
   toolUseId: string | null;
   sessionId: string;
+}> & {
   toolName: string;
   toolInput: unknown;
   responseLocation: 'app_and_terminal' | 'terminal_only';
-}> & { observedAnswers?: unknown; observedApproval?: boolean };
+  observedAnswers?: unknown;
+  observedApproval?: boolean;
+};
 
 type RequestOption = Readonly<{
   choice: string;
@@ -223,13 +226,22 @@ export class ClaudeUnifiedDialogChoiceBroker {
       const toolInput = data.tool_input ?? data.toolInput;
       const toolUseId = id ?? this.session.claudeToolHookCorrelation.findToolUseId({ sessionId, toolName, toolInput });
       const previous = this.nativePrompt;
-      if (previous && previous.occurrenceId !== toolUseId) this.clearNativePrompt();
+      const responseLocation = data.happierResponseLocation === 'terminal_only' ? 'terminal_only' : 'app_and_terminal';
+      if (previous && toolUseId !== null && previous.toolUseId === toolUseId && previous.sessionId === sessionId) {
+        // Repeated native ingress observes one provider prompt, without another
+        // transport waiter. Keep its pending choice and lifecycle reference intact.
+        previous.toolName = toolName;
+        previous.toolInput = toolInput;
+        previous.responseLocation = responseLocation;
+        return;
+      }
+      if (previous) this.clearNativePrompt();
       this.nativePrompt = {
         occurrenceId: toolUseId ?? randomUUID(), toolUseId, sessionId, toolName, toolInput,
-        responseLocation: data.happierResponseLocation === 'terminal_only' ? 'terminal_only' : 'app_and_terminal',
+        responseLocation,
       };
       this.publishNativeLifecycle(this.nativePrompt, 'PermissionRequest');
-      if (previous && previous.occurrenceId !== this.nativePrompt.occurrenceId && !this.applyingNativeAnswer) {
+      if (previous && !this.applyingNativeAnswer) {
         void this.cancelPendingChoice('claude_native_prompt_replaced').catch(() => {
           logger.infoFile('[claude-unified-dialog-choice] Native prompt replacement settlement failed');
         });
@@ -353,10 +365,12 @@ export class ClaudeUnifiedDialogChoiceBroker {
       }
       const permission = !isAskUserQuestionToolName(prompt.toolName) ? parseClaudeNativePermissionScreen(state.text) : null;
       if (permission && prompt.toolUseId && (!permission.amended || permission.kind === 'plan')) {
+        const command = prompt.toolName === 'Bash' ? extractShellCommand(prompt.toolInput) : null;
         return {
           ...prompt, kind: 'native', dialogId: 'tool_permission', owner: null,
           questions: [], questionId: 'claudeNativePermission', requestReason: 'claude_native_permission',
-          header: prompt.toolName, question: permission.context,
+          header: prompt.toolName,
+          question: command ? `${command}\n\n${permission.explanation ?? permission.context}` : permission.context,
           permissionPresentation: permission,
           options: permission.options.map((option, index) => ({
             choice: `option_${index + 1}`, label: option.label, description: '',
@@ -559,7 +573,7 @@ export class ClaudeUnifiedDialogChoiceBroker {
   ): Promise<PermissionRpcConsumerOutcome> {
     const requestId = typeof payload?.id === 'string' ? payload.id : '';
     if (!requestId) return false;
-    const context = this.permissionCoordinator.getResponseContext(requestId);
+    const context = this.permissionCoordinator.getResponseContext(requestId, payload.occurrenceId);
     if (!isDialogChoiceContext(context)) return false;
     if (context.status !== 'live') {
       void this.completeSourceOwnedCancellation(requestId, 'claude_unified_dialog_choice_no_live_waiter').catch(() => {
@@ -647,6 +661,7 @@ export class ClaudeUnifiedDialogChoiceBroker {
       }
       completion = await this.permissionCoordinator.completeRpcResponse({
         context,
+        expectedOccurrenceId: payload.occurrenceId,
         completion: {
           result: decision,
           completedRequest: {

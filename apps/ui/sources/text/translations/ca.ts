@@ -617,7 +617,8 @@ export const ca: TranslationStructure = {
         commands: {
             composerAbortConfirm: 'Confirma la interrupció',
             composerFocus: 'Enfoca el compositor',
-            composerSendImmediate: 'Envia immediatament',
+            composerSendImmediate: 'Enviament alternatiu (cua / orientar)',
+            composerSendInterrupt: 'Interromp i envia',
             composerSendPending: 'Envia a la cua pendent',
             commandPaletteOpen: 'Obre la paleta d’ordres',
             modeCycle: 'Canvia de mode',
@@ -653,6 +654,10 @@ export const ca: TranslationStructure = {
     },
 
     transcript: {
+        quote: {
+            action: 'Cita',
+            actionA11y: 'Cita el text seleccionat al teu missatge',
+        },
         selection: {
             enterA11y: 'Entra al mode de selecció',
             exitA11y: 'Surt del mode de selecció',
@@ -1106,6 +1111,15 @@ export const ca: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Desa els diagnòstics",
+        diagnosticsSaveFailed: "No s’han pogut desar els diagnòstics. Els detalls de l’error continuen disponibles. Torna-ho a provar o copia’ls.",
+        copyFailed: "No s’han pogut copiar els detalls de l’error. Torna-ho a provar.",
+        discardFailed: "No s’ha pogut descartar l’error desat. Torna-ho a provar.",
+        restartWithoutReport: "Reinicia sense desar",
+        reportSaveFailed: "No s’han pogut desar els detalls de l’error. Copia’ls abans de reiniciar o torna a provar l’informe.",
+        savedReportNotice: "L’error desat es mostra a continuació. Revisa’l i edita’l abans d’enviar-lo. Es conserva en aquest dispositiu fins que l’enviïs o el descartis.",
+        discardSavedReport: "Descarta l’error desat",
+        stackTruncated: "La pila s’ha escurçat per a aquest camp. L’error complet continua desat en aquest dispositiu.",
         title: 'Alguna cosa ha fallat',
         subtitle:
             'Happier ha patit un error inesperat. Pots reiniciar la interfície de l\'app o copiar els detalls per al suport.',
@@ -3341,6 +3355,10 @@ export const ca: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Utilitza la barra de títol del Windows',
+        nativeTitleBarSubtitle: 'Mostra el marc i els controls de finestra estàndard del Windows.',
+        nativeTitleBarChangeFailed: 'No s’ha pogut canviar la barra de títol. Torna-ho a provar.',
+        nativeTitleBarPersistenceFailed: 'No s’ha pogut carregar o desar la preferència de la barra de títol. Torna-la a canviar per reintentar-ho.',
         title: 'Escriptori',
         footer: 'Controla com es comporta el Happier en aquest ordinador.',
         backgroundServiceTitle: 'Segueix disponible en segon pla',
@@ -3543,6 +3561,17 @@ export const ca: TranslationStructure = {
             openSettingsFailed: 'No s\'ha pogut obrir la configuració del sistema.',
         },
         pushTroubleshooting: {
+            remoteTest: {
+                title: "Envia una prova remota",
+                subtitle: "Envia una notificació push real a aquest telèfon mitjançant una màquina connectada a aquest Home.",
+                notRegistered: "Registra el token d’aquest telèfon i torna-ho a provar.",
+                noMachine: "Connecta una màquina a aquest Home per enviar una prova remota.",
+                accepted: "El servei push ha acceptat la prova. Això no confirma que el telèfon l’hagi rebut o mostrat. Revisa les notificacions.",
+                rejected: "El servei push no ha confirmat l’acceptació. Revisa les notificacions i el registre abans de tornar-ho a provar.",
+                invalidCredentials: "El proveïdor push ha rebutjat les credencials d’aquesta app. Revisa la configuració d’APNs o FCM.",
+                unsupported: "Actualitza la CLI de Happier de la màquina connectada per enviar proves remotes.",
+                unconfirmed: "No s’ha pogut confirmar el resultat. La sol·licitud encara es pot completar; revisa les notificacions abans de tornar-ho a provar.",
+            },
             status: {
                 title: 'Estat',
                 footer: 'Comprova l’ajust del compte, el permís del sistema i el registre al servidor.',
@@ -3679,7 +3708,12 @@ export const ca: TranslationStructure = {
     },
 
     notifications: {
+        permissionActionNeedsReview: "No s’ha pogut confirmar la resposta enviada des de la notificació. Revisa les sol·licituds pendents abans de tornar a respondre.",
+        permissionActionReviewUnavailable: "No s’han pogut obrir el Home i el compte d’aquesta resposta. Comprova la connexió i l’inici de sessió a Configuració i, després, les sol·licituds pendents.",
         actions: {
+            reviewPendingRequests: "Revisa les sol·licituds pendents",
+            questionReply: "Respon",
+            questionPlaceholder: "La teva resposta",
             allow: 'Permetre',
             deny: 'Denegar',
             answer: 'Respondre',
@@ -4194,6 +4228,16 @@ export const ca: TranslationStructure = {
 	                    },
 	                },
 	                fields: {
+	                    codexReasoningSummaries: {
+	                        title: "Resums del raonament",
+	                        footer: "Controla si Codex genera resums, independentment de la visualització a la conversa. S’aplica en iniciar o reprendre una sessió. La disponibilitat depèn del model.",
+	                        generation: "Generació",
+	                        options: {
+	                            default: "Fes servir la configuració de Codex o el valor per defecte del model.",
+	                            enabled: "Demana resums si el model els admet.",
+	                            disabled: "No generis resums del raonament.",
+	                        },
+	                    },
 	                    codexBackendMode: {
 	                        title: 'Mode d\'encaminament de Codex',
 	                        subtitle: 'Selecciona el servidor d’aplicacions, ACP o MCP.',
@@ -4229,6 +4273,8 @@ export const ca: TranslationStructure = {
 
     settingsAppearance: {
       tabBarAppearance: {
+        sideRailTitle: "Pestanyes a la barra lateral",
+        sideRailSubtitle: "Desactiva aquesta opció per utilitzar la barra de pestanyes de Happier i els seus gestos de lliscament.",
         title: 'Barra de pestanyes',
         footer: 'Personalitza la barra de pestanyes inferior.',
         showLabels: 'Mostra les etiquetes de les pestanyes',
@@ -6202,6 +6248,17 @@ deps: {
             presetName: 'Nom del predefinit', movePresetUp: 'Mou amunt', movePresetDown: 'Mou avall',
             noPresets: 'Cap predefinit desat', noPresetsMessage: 'Desa’n un quan triïs un recordatori personalitzat.',
         },
+        appearance: {
+            setColor: 'Defineix el color',
+            customColor: 'Color personalitzat…',
+            customColorTitle: 'Color personalitzat',
+            customColorMessage: 'Tria un to o introdueix un valor hexadecimal.',
+            invalidColor: 'Fes servir un valor hexadecimal com #3A7BD5.',
+            removeColor: 'Treu el color',
+            inheritedFromProject: 'Del projecte',
+            customColorLabel: ({ hex }: { hex: string }) => `Color personalitzat ${hex}`,
+            colors: { blue: 'Blau', green: 'Verd', orange: 'Taronja', yellow: 'Groc', red: 'Vermell', indigo: 'Indi', purple: 'Porpra' },
+        },
         workingSectionTitle: 'Treballant',
         hideInactiveSessions: 'Amaga sessions inactives',
         showInactiveSessions: 'Mostra sessions inactives',
@@ -6370,6 +6427,9 @@ deps: {
         tmuxFallback: 'Fallback de tmux',
         copyMetadata: 'Copia les metadades',
         copyDebugInformation: 'Copia la informació',
+        sessionInformation: "Informació de la sessió",
+        happierSessionId: "ID de sessió de Happier",
+        providerSessionId: ({ provider }: { provider: string }) => `ID de sessió de ${provider}`,
         debugInformationCopyLabel: 'Informació',
         providerSessionLogs: ({ provider }: { provider: string }) => `Registres de sessió de ${provider}`,
         agentState: 'Estat de l\'agent',
@@ -6382,6 +6442,9 @@ deps: {
         thinking: 'Pensant',
         thinkingSince: 'Pensant des de',
         thinkingLevel: 'Nivell de pensament',
+        peerReportFrom: ({ name }: { name: string }) => `Informe de ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Missatge de ${name}`,
+        peerUnnamedSender: 'un altre agent',
         cliVersion: 'Versió del CLI',
         cliVersionOutdated: 'Actualització del CLI requerida',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
@@ -6391,6 +6454,8 @@ deps: {
         deleteSessionSubtitle: 'Elimina permanentment aquesta sessió',
         deleteSessionConfirm: 'Eliminar la sessió permanentment?',
         deleteSessionWarning: 'Aquesta acció no es pot desfer. Tots els missatges i dades associats amb aquesta sessió s\'eliminaran permanentment.',
+        stopAndDeleteSession: "Atura i elimina",
+        stopAndDeleteSessionWarning: "Això aturarà la sessió i eliminarà permanentment tots els seus missatges i dades. Aquesta acció no es pot desfer.",
         failedToDeleteSession: 'Error en eliminar la sessió',
         sessionDeleted: 'Sessió eliminada amb èxit',
         manageSharing: 'Gestiona l\'accés',
@@ -6449,6 +6514,11 @@ deps: {
     },
 
     agentInput: {
+        sendOptions: {
+            title: "Opcions d’enviament",
+            queue: "Posa a la cua",
+            hint: "Mantén premut per triar com enviar",
+        },
         chipPicker: {
             selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}. Seleccionat.`,
         },
@@ -9324,7 +9394,7 @@ settingsSession: {
             offline: 'Algunes màquines estan sense connexió',
             checkedAt: ({ time }: { time: string }) => `Última comprovació: ${time}`,
             upToDateDescription: 'Happier, la seva línia d’ordres i els teus agents estan al dia.',
-            unknownDescription: 'Tot el que s’ha pogut comprovar està al dia. La resta es tornarà a comprovar quan sigui accessible.',
+            unknownDescription: "Alguna informació d’actualització no està disponible o és en memòria cau. Consulta les files afectades.",
             offlineDescription: 'Tot el que és accessible està al dia. Les màquines sense connexió es comprovaran quan tornin.',
         },
         settingsSubtitle: {
@@ -9370,6 +9440,9 @@ settingsSession: {
             appCheckFailed: 'No s’ha pogut comprovar si hi ha una versió més nova.',
             appDownloadFailed: 'La baixada no ha acabat.',
             appInstallFailed: 'No s’ha pogut instal·lar l’actualització.',
+            cachedRelease: 'Informació de versió en memòria cau; no s’actualitza aquí',
+            cachedReleaseChannel: ({ channel }: { channel: string }) => `Informació de versió ${channel} en memòria cau; no s’actualitza aquí`,
+            manualUpdateInterruptsSessions: 'Actualitza en aquesta màquina. Els serveis es poden aturar i les sessions actives poden acabar.',
             latestUnknown: 'No s’ha pogut comprovar si hi ha una versió més nova',
             rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} no s’ha iniciat en aquesta màquina, així que continua amb la ${kept}.`,
             installedByYou: 'Instal·lat per tu',
@@ -9621,6 +9694,7 @@ settingsSession: {
         failedToConnectTerminal: 'Ha fallat connectar el terminal',
         cameraPermissionsRequiredToConnectTerminal: 'Es requereixen permisos de càmera per connectar el terminal',
         failedToLinkDevice: 'Ha fallat enllaçar el dispositiu',
+        deviceLinkRequestNotFound: "No s’ha trobat cap sol·licitud d’enllaç pendent en aquest relay. Comprova que tots dos dispositius utilitzin el mateix relay i genera un codi QR nou.",
         cameraPermissionsRequiredToScanQr: 'Es requereixen permisos de càmera per escanejar codis QR',
         qrScannerUnavailable: 'No s’ha pogut obrir l’escàner de QR. Torna-ho a provar o introdueix l’URL manualment.'
     },

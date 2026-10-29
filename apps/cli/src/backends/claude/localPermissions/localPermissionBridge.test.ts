@@ -5,6 +5,11 @@ import { join } from 'node:path';
 
 import { createPermissionHandlerSessionStub } from '../utils/permissionHandler.testkit';
 import { ClaudeLocalPermissionBridge } from './localPermissionBridge';
+import { routeClaudePermissionHook } from './routeClaudePermissionHook';
+import { createClaudeUnifiedHookLifecycleBridge } from '../unifiedTerminal/createClaudeUnifiedHookLifecycleBridge';
+import { createClaudeUnifiedInputArbiter } from '../unifiedTerminal/createClaudeUnifiedInputArbiter';
+import { createClaudeUnifiedPromptInjector } from '../unifiedTerminal/createClaudeUnifiedPromptInjector';
+import type { SessionHookData } from '../utils/startHookServer';
 import { createClaudeSessionTranscriptProjector } from '../localControl/createClaudeSessionTranscriptProjector';
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import { loop, type EnhancedMode } from '../loop';
@@ -174,34 +179,90 @@ describe('ClaudeLocalPermissionBridge', () => {
     })).resolves.toBe(0);
   });
 
-  it('keeps a duplicated hook live until its last transport waiter disconnects', async () => {
+  it.each(['disconnect', 'PostToolUse'] as const)('keeps duplicated permission input blocked until %s retires the request', async (completion) => {
     const { session, client } = createPermissionHandlerSessionStub('duplicated-hook-disconnect');
     const bridge = new ClaudeLocalPermissionBridge(session, { responseTimeoutMs: null });
     bridge.activate();
+    const injectedTexts: string[] = [];
+    const injector = createClaudeUnifiedPromptInjector({
+      // Native terminal writes are the boundary; lifecycle, arbitration and injection stay real.
+      inputInjection: {
+        hostKind: 'tmux',
+        injectUserPrompt: async ({ text }) => {
+          injectedTexts.push(text);
+          return { status: 'injected', at: Date.now(), bytesWritten: text.length };
+        },
+      },
+    });
+    const arbiter = createClaudeUnifiedInputArbiter({ quietPeriodMs: 0, injectPrompt: injector.injectPrompt });
+    let observeHook: ((data: SessionHookData) => void) | undefined;
+    const lifecycle = createClaudeUnifiedHookLifecycleBridge({
+      subscribeClaudeSessionHooks: (callback) => {
+        observeHook = callback;
+        return () => { observeHook = undefined; };
+      },
+      arbiter,
+      completionQuiescenceMs: 0,
+    });
+    lifecycle.start({ abortSignal: new AbortController().signal });
+    arbiter.observeLifecycle({ type: 'output' });
     const firstTransport = new AbortController();
     const secondTransport = new AbortController();
     const data = {
       hook_event_name: 'PermissionRequest', tool_name: 'Bash',
       tool_input: { command: 'pwd' }, tool_use_id: 'duplicated-hook-disconnect',
     };
-    const first = bridge.handlePermissionHook(data, { signal: firstTransport.signal });
-    const second = bridge.handlePermissionHook(data, { signal: secondTransport.signal });
+    session.onClaudeSessionHook = (hook) => { observeHook?.(hook); };
+    const handleHook = (signal: AbortSignal) => routeClaudePermissionHook({
+      data, options: { signal }, session, bridge,
+      settings: { claudeUnifiedTerminalPermissionResponseLocation: 'app_only' },
+      unifiedTerminalActive: true,
+    });
+    const first = handleHook(firstTransport.signal);
+    const second = handleHook(secondTransport.signal);
 
     try {
       await vi.advanceTimersByTimeAsync(0);
+      await arbiter.enqueueUiMessage({ message: 'continue after permission', origin: { kind: 'ui_immediate' } });
+      await arbiter.drainWhenSafe();
+      expect(injectedTexts).toEqual([]);
+      if (completion === 'PostToolUse') {
+        // Provider completion releases both references even before their transport callbacks finish.
+        const completedHook = { ...data, hook_event_name: 'PostToolUse' };
+        observeHook?.(completedHook);
+        await arbiter.drainWhenSafe();
+        expect(injectedTexts).toEqual(['continue after permission']);
+        bridge.handleSessionHook(completedHook);
+        await expect(first).resolves.toMatchObject({ hookSpecificOutput: { decision: { behavior: 'allow' } } });
+        await expect(second).resolves.toMatchObject({ hookSpecificOutput: { decision: { behavior: 'allow' } } });
+        // Both synthetic completions have now arrived and must leave input unblocked.
+        expect(arbiter.snapshot().permissionBlocked).toBe(false);
+        expect(client.agentState.completedRequests['duplicated-hook-disconnect']).toMatchObject({ status: 'approved' });
+        return;
+      }
       firstTransport.abort();
       await vi.advanceTimersByTimeAsync(0);
       await expect(first).resolves.toMatchObject({ continue: true });
       expect(client.agentState.requests['duplicated-hook-disconnect']).toBeDefined();
       expect(client.agentState.completedRequests['duplicated-hook-disconnect']).toBeUndefined();
+      await arbiter.drainWhenSafe();
+      expect(injectedTexts).toEqual([]);
+      expect(arbiter.snapshot().permissionBlocked).toBe(true);
 
       secondTransport.abort();
       await vi.advanceTimersByTimeAsync(0);
       await expect(second).resolves.toMatchObject({ continue: true });
       expect(client.agentState.requests['duplicated-hook-disconnect']).toBeUndefined();
       expect(client.agentState.completedRequests['duplicated-hook-disconnect']).toMatchObject({ status: 'canceled' });
+      await arbiter.drainWhenSafe();
+      expect(injectedTexts).toEqual(['continue after permission']);
     } finally {
+      firstTransport.abort();
+      secondTransport.abort();
+      await Promise.allSettled([first, second]);
       bridge.dispose();
+      lifecycle.dispose();
+      await arbiter.dispose();
     }
   });
 

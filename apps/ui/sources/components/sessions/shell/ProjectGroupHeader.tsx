@@ -10,8 +10,18 @@ import { Text } from '@/components/ui/text/Text';
 import { Typography } from '@/constants/Typography';
 import type { SessionListViewItem } from '@/sync/domains/state/storage';
 import { t } from '@/text';
+import { Modal } from '@/modal';
 import { useWorkspaceFavicon } from './useWorkspaceFavicon';
 import { Icon } from '@/components/ui/icons/Icon';
+import { useCustomSessionAppearanceColors } from '@/hooks/session/useSessionAppearance';
+import { resolveSessionAppearanceColor, type SessionAppearanceColor } from '@/sync/domains/session/organization/appearanceColor';
+import {
+    buildSessionAppearanceColorMenuItem,
+    resolveSessionAppearanceColorMenuChoice,
+} from './appearance/sessionAppearanceColorMenu';
+
+const WORKSPACE_COLOR_MENU_ID = 'workspace-color';
+const WORKSPACE_COLOR_DOT_SIZE = 8;
 
 const WORKSPACE_FAVICON_SIZE = 16;
 const WORKSPACE_FAVICON_RADIUS = 4;
@@ -66,6 +76,14 @@ const stylesheet = StyleSheet.create((theme) => ({
         marginTop: 2,
         ...Typography.default(),
     },
+    colorDot: {
+        width: WORKSPACE_COLOR_DOT_SIZE,
+        height: WORKSPACE_COLOR_DOT_SIZE,
+        borderRadius: WORKSPACE_COLOR_DOT_SIZE / 2,
+        flexShrink: 0,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.colors.border.default,
+    },
     faviconFrame: {
         width: WORKSPACE_FAVICON_SIZE,
         minWidth: WORKSPACE_FAVICON_SIZE,
@@ -119,7 +137,6 @@ const stylesheet = StyleSheet.create((theme) => ({
 export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: Readonly<{
     item: Extract<SessionListViewItem, { type: 'header' }>;
     hasMultipleMachines: boolean;
-    workspaceLabelsV1: Record<string, string>;
     workspaceFaviconsEnabled?: boolean;
     workspaceMachineSubtitlesEnabled?: boolean;
     dragHandleGesture?: UseSessionInlineDragResult['gesture'];
@@ -127,8 +144,10 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
     onMoveDown?: () => void;
     onRenameWorkspace: (workspaceKey: string, currentLabel: string) => void;
     onResetWorkspaceName: (workspaceKey: string) => void;
+    /** The list's canonical workspace-colour writer; sessions in the project inherit this colour. */
+    onSetWorkspaceColor?: (workspaceKey: string, color: SessionAppearanceColor | null, opts?: Readonly<{ serverId?: string | null }>) => void;
     onCreateSession: () => void;
-    onAddFolder: () => void | Promise<void>;
+    onAddFolder?: () => void | Promise<void>;
     collapsed: boolean;
     onToggleCollapse: () => void;
     headerTestId: string;
@@ -138,11 +157,11 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
     const {
         item,
         hasMultipleMachines,
-        workspaceLabelsV1,
         workspaceFaviconsEnabled = false,
         workspaceMachineSubtitlesEnabled = true,
         onRenameWorkspace,
         onResetWorkspaceName,
+        onSetWorkspaceColor,
         onCreateSession,
         onAddFolder,
         collapsed,
@@ -157,13 +176,21 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
     const showChevron = !isWeb || collapsed || showHoverActions;
     const workspaceKey = item.workspaceKey ?? '';
     const reorderHandleKey = item.groupKey ?? workspaceKey;
-    const customLabel = workspaceKey ? workspaceLabelsV1[workspaceKey] : undefined;
+    const customLabel = item.workspaceLabel;
     const displayTitle = customLabel || item.title;
     const hasCustomLabel = Boolean(customLabel);
     const shouldUseStartEllipsis = !hasCustomLabel && isWeb;
     const nativeEllipsizeMode = !isWeb && !hasCustomLabel ? 'head' : 'tail';
     const actionIconColor = theme.colors.text.secondary;
     const canCreateSession = typeof onCreateSession === 'function' && Boolean(item.workspaceScopeHint);
+    const canAddFolder = typeof onAddFolder === 'function';
+    const workspaceServerId = item.workspaceScopeHint?.serverId ?? item.serverId ?? null;
+    const canSetColor = typeof onSetWorkspaceColor === 'function' && Boolean(workspaceKey);
+    const workspaceColor = item.appearanceColor ?? null;
+    const colorDotPaint = resolveSessionAppearanceColor(workspaceColor, theme);
+    // Colours in use are detail data: read only while this header's menu is open.
+    const customColors = useCustomSessionAppearanceColors(workspaceServerId, { enabled: menuOpen && canSetColor });
+    const [customColorPickerLoading, setCustomColorPickerLoading] = React.useState(false);
     const favicon = useWorkspaceFavicon({
         enabled: workspaceFaviconsEnabled,
         serverId: item.workspaceScopeHint?.serverId ?? item.serverId ?? null,
@@ -177,7 +204,7 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
                 id: 'add-folder',
                 title: t('sessionsList.addFolder'),
                 icon: <Icon name="folder-open" size={16} color={actionIconColor} />,
-                disabled: !canCreateSession,
+                disabled: !canAddFolder,
             },
             {
                 id: 'rename',
@@ -185,6 +212,16 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
                 icon: <Icon name="pencil" size={16} color={actionIconColor} />,
             },
         ];
+        if (canSetColor) {
+            items.push(buildSessionAppearanceColorMenuItem({
+                menuId: WORKSPACE_COLOR_MENU_ID,
+                iconColor: actionIconColor,
+                current: workspaceColor,
+                customColors,
+                theme,
+                customPickerLoading: customColorPickerLoading,
+            }));
+        }
         if (props.onMoveUp) items.push({ id: 'move-up', title: t('common.moveUp') });
         if (props.onMoveDown) items.push({ id: 'move-down', title: t('common.moveDown') });
         if (hasCustomLabel) {
@@ -195,11 +232,38 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
             });
         }
         return items;
-    }, [hasCustomLabel, actionIconColor, canCreateSession, props.onMoveUp, props.onMoveDown]);
+    }, [
+        hasCustomLabel,
+        actionIconColor,
+        canAddFolder,
+        canSetColor,
+        customColorPickerLoading,
+        customColors,
+        props.onMoveUp,
+        props.onMoveDown,
+        theme,
+        workspaceColor,
+    ]);
 
     const handleMenuSelect = React.useCallback(async (itemId: string) => {
+        if (canSetColor && itemId.startsWith(`${WORKSPACE_COLOR_MENU_ID}:`)) {
+            try {
+                const color = await resolveSessionAppearanceColorMenuChoice({
+                    menuId: WORKSPACE_COLOR_MENU_ID,
+                    itemId,
+                    current: workspaceColor,
+                    serverId: workspaceServerId,
+                    onPickerLoading: setCustomColorPickerLoading,
+                    closeMenus: () => setMenuOpen(false),
+                });
+                if (color !== undefined) onSetWorkspaceColor?.(workspaceKey, color, { serverId: workspaceServerId });
+            } catch {
+                Modal.alert(t('common.error'), t('errors.unknownError'));
+            }
+            return;
+        }
         if (itemId === 'add-folder') {
-            await onAddFolder();
+            await onAddFolder?.();
         } else if (itemId === 'rename') {
             onRenameWorkspace(workspaceKey, displayTitle);
         } else if (itemId === 'move-up') {
@@ -209,7 +273,19 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
         } else if (itemId === 'reset') {
             onResetWorkspaceName(workspaceKey);
         }
-    }, [workspaceKey, displayTitle, onAddFolder, onRenameWorkspace, onResetWorkspaceName, props.onMoveUp, props.onMoveDown]);
+    }, [
+        canSetColor,
+        workspaceColor,
+        workspaceServerId,
+        workspaceKey,
+        displayTitle,
+        onAddFolder,
+        onRenameWorkspace,
+        onResetWorkspaceName,
+        onSetWorkspaceColor,
+        props.onMoveUp,
+        props.onMoveDown,
+    ]);
 
     const chevronColor = theme.colors.text.secondary;
     return (
@@ -229,6 +305,14 @@ export const ProjectGroupHeader = React.memo(function ProjectGroupHeader(props: 
                     onHoverOut={isWeb ? () => setIsRowHovered(false) : undefined}
                 >
                     <View style={styles.titleRow}>
+                        {colorDotPaint ? (
+                            <View
+                                testID={`session-workspace-color:${workspaceKey}`}
+                                accessible={false}
+                                importantForAccessibility="no-hide-descendants"
+                                style={[styles.colorDot, { backgroundColor: colorDotPaint }]}
+                            />
+                        ) : null}
                         {favicon ? (
                             <View testID="session-list-workspace-favicon" style={styles.faviconFrame}>
                                 <Image

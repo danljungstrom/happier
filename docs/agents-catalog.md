@@ -59,6 +59,25 @@ mode-bearing transport must not be contradicted by a `none` mode descriptor.
 Antigravity uses the shared model/mode probes and startup overrides, with no
 provider-owned picker or static mode catalog.
 
+ACP model selection has one resolver in
+`apps/cli/src/agent/acp/configOptionChoiceNormalization.ts`, shared by runtime
+metadata publication and preflight probing. It prefers the catalog's exact
+`acpModelConfigOptionId`, then an unambiguous Model id/name, then a single
+selector with category `model`. Several model-category fields are not a model
+catalog: agents may use that category for provider or fast controls too. Other
+configuration fields remain available through generic configuration controls;
+observed model-scoped choices apply to the observed model. Full successful
+`set_config_option` response snapshots refresh dependent choices even without
+notifications; rejected setters preserve the previous observed state.
+
+Generic ACP permission mappings may declare ordered native mode candidates.
+The catalog backend uses `resolveAcpPermissionModeId` from `packages/agents` to
+resolve those candidates against the session's advertised modes on both new and
+load, failing closed when none matches. UI permission explanations use the same
+resolver with the matching session's advertised modes. Agent-specific
+candidate ids stay in `packages/agents/src/acp.ts`; string mappings and null
+delegation retain their existing semantics.
+
 The session-control compatibility reader derives an implicit Plan request from
 legacy permission metadata only when the advertised or static options actually
 contain that mode. Explicit requested modes retain their pending state even when
@@ -562,6 +581,23 @@ If you’re running this repo via happy-stacks, prefer:
 ---
 
 ## Connected-account quota recovery (development)
+
+Codex app-server reports accepted failures from its terminal turn boundary,
+including provider-started native goal turns. See
+[usage-limit reset continuation](cli-architecture.md#usage-limit-reset-continuation-development)
+for daemon binding authorization, native-login ownership and goal reactivation.
+
+Claude pool sessions can proactively switch accounts during a turn through the
+shared `CLAUDE_CONFIG_DIR` home. The catalog's provider-owned auth descriptor
+declares in-turn application; the shared generation writer and verifier prove
+the selected profile, generation, credential revision and native auth. The current
+request finishes on the old account and the next request reads the new credentials
+(maintainer live proof, 2026-07-08). External token injection, such as Codex, still
+requires exact runtime identity and refresh-selection resync. The shared predictive
+policy retains suppression or turn-boundary deferral for descriptors that do not
+support in-turn application, and predictive switching cannot fall back to a restart.
+Quota suppression and request-failure reasons use the existing default-on daemon
+quota diagnostic file log.
 
 Claude OAuth profile normalization belongs to
 `packages/protocol/src/providers/claude/oauthProfile.ts`; the agents package

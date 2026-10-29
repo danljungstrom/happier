@@ -642,7 +642,8 @@ export const ru: TranslationStructure = {
         commands: {
             composerAbortConfirm: 'Подтвердить остановку',
             composerFocus: 'Перейти к вводу',
-            composerSendImmediate: 'Отправить сразу',
+            composerSendImmediate: 'Альтернативная отправка (очередь / направление)',
+            composerSendInterrupt: 'Прервать и отправить',
             composerSendPending: 'Отправить в очередь ожидания',
             commandPaletteOpen: 'Открыть палитру команд',
             modeCycle: 'Переключить режим',
@@ -678,6 +679,14 @@ export const ru: TranslationStructure = {
   },
 
   transcript: {
+
+    quote: {
+
+      action: 'Цитировать',
+
+      actionA11y: 'Процитировать выделенный текст в сообщении',
+
+    },
 
     selection: {
 
@@ -1188,6 +1197,15 @@ export const ru: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Сохранить диагностику",
+      diagnosticsSaveFailed: "Не удалось сохранить диагностику. Сведения об ошибке по-прежнему доступны. Повторите попытку или скопируйте их.",
+      copyFailed: "Не удалось скопировать сведения о сбое. Повторите попытку.",
+      discardFailed: "Не удалось удалить сохранённый сбой. Повторите попытку.",
+      restartWithoutReport: "Перезапустить без сохранения",
+      reportSaveFailed: "Не удалось сохранить сведения о сбое. Скопируйте их перед перезапуском или повторите отправку отчёта.",
+      savedReportNotice: "Сохранённый сбой показан ниже. Проверьте и отредактируйте его перед отправкой. Он останется на устройстве до отправки или удаления.",
+      discardSavedReport: "Удалить сохранённый сбой",
+      stackTruncated: "Стек сокращён для этого поля. Полные сведения о сбое сохранены на этом устройстве.",
     title: "Что-то пошло не так",
     subtitle:
       "В Happier произошла непредвиденная ошибка. Можно перезапустить интерфейс приложения или скопировать детали для поддержки.",
@@ -3482,6 +3500,10 @@ export const ru: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Использовать строку заголовка Windows',
+    nativeTitleBarSubtitle: 'Показывать стандартную рамку и кнопки управления окном Windows.',
+    nativeTitleBarChangeFailed: 'Не удалось изменить строку заголовка. Попробуйте ещё раз.',
+    nativeTitleBarPersistenceFailed: 'Не удалось загрузить или сохранить настройку строки заголовка. Измените её снова, чтобы повторить попытку.',
     title: 'Рабочий стол',
     footer: 'Управляет поведением Happier на этом компьютере.',
     backgroundServiceTitle: 'Оставаться доступным в фоне',
@@ -3641,6 +3663,17 @@ export const ru: TranslationStructure = {
         openSettingsFailed: 'Не удалось открыть системные настройки.',
     },
     pushTroubleshooting: {
+            remoteTest: {
+                title: "Отправить удалённый тест",
+                subtitle: "Отправьте настоящее push-уведомление на этот телефон через компьютер, подключённый к этому Home.",
+                notRegistered: "Зарегистрируйте токен этого телефона и повторите попытку.",
+                noMachine: "Подключите компьютер к этому Home для отправки удалённого теста.",
+                accepted: "Push-сервис принял тест. Это не подтверждает получение или показ на телефоне. Проверьте уведомления.",
+                rejected: "Push-сервис не подтвердил приём. Проверьте уведомления и регистрацию перед повторной попыткой.",
+                invalidCredentials: "Поставщик push отклонил учётные данные приложения. Проверьте настройки APNs или FCM.",
+                unsupported: "Обновите CLI Happier на подключённом компьютере для отправки удалённых тестов.",
+                unconfirmed: "Не удалось подтвердить результат. Запрос ещё может завершиться; проверьте уведомления перед повторной попыткой.",
+            },
       status: {
         title: "Статус",
         footer: "Проверяет настройку аккаунта, разрешение ОС и состояние регистрации на сервере.",
@@ -3828,7 +3861,12 @@ export const ru: TranslationStructure = {
   },
 
     notifications: {
+        permissionActionNeedsReview: "Не удалось подтвердить ответ, отправленный из уведомления. Проверьте ожидающие запросы, прежде чем отвечать снова.",
+        permissionActionReviewUnavailable: "Не удалось открыть Home и аккаунт этого ответа. Проверьте соединение и вход в настройках, затем ожидающие запросы.",
       actions: {
+            reviewPendingRequests: "Проверить ожидающие запросы",
+            questionReply: "Ответить",
+            questionPlaceholder: "Ваш ответ",
         allow: 'Разрешить',
         deny: 'Отклонить',
         answer: 'Ответить',
@@ -4349,6 +4387,16 @@ export const ru: TranslationStructure = {
           },
         },
         fields: {
+          codexReasoningSummaries: {
+              title: "Сводки рассуждений",
+              footer: "Определяет, создаёт ли Codex сводки, независимо от отображения в переписке. Применяется при запуске или возобновлении сессии. Доступность зависит от модели.",
+              generation: "Создание",
+              options: {
+                  default: "Использовать конфигурацию Codex или настройку модели по умолчанию.",
+                  enabled: "Запрашивать сводки, если модель их поддерживает.",
+                  disabled: "Не создавать сводки рассуждений.",
+              },
+          },
           codexBackendMode: {
             title: "Режим маршрутизации Codex",
             subtitle: "Выберите App Server, ACP или MCP.",
@@ -4384,6 +4432,8 @@ export const ru: TranslationStructure = {
 
   settingsAppearance: {
     tabBarAppearance: {
+      sideRailTitle: "Вкладки на боковой панели",
+      sideRailSubtitle: "Отключите, чтобы использовать панель вкладок Happier и жесты смахивания.",
       title: 'Панель вкладок',
       footer: 'Настройте нижнюю панель вкладок.',
       showLabels: 'Показывать подписи вкладок',
@@ -5505,6 +5555,17 @@ export const ru: TranslationStructure = {
       presetName: 'Название шаблона', movePresetUp: 'Переместить вверх', movePresetDown: 'Переместить вниз',
       noPresets: 'Нет сохранённых шаблонов', noPresetsMessage: 'Сохраните шаблон при следующем выборе своего времени.',
     },
+    appearance: {
+      setColor: 'Задать цвет',
+      customColor: 'Свой цвет…',
+      customColorTitle: 'Свой цвет',
+      customColorMessage: 'Выберите оттенок или введите шестнадцатеричное значение.',
+      invalidColor: 'Используйте шестнадцатеричное значение, например #3A7BD5.',
+      removeColor: 'Убрать цвет',
+      inheritedFromProject: 'Из проекта',
+      customColorLabel: ({ hex }: { hex: string }) => `Свой цвет ${hex}`,
+      colors: { blue: 'Синий', green: 'Зелёный', orange: 'Оранжевый', yellow: 'Жёлтый', red: 'Красный', indigo: 'Индиго', purple: 'Фиолетовый' },
+    },
     workingSectionTitle: 'В работе',
     hideInactiveSessions: 'Скрыть неактивные сессии',
     showInactiveSessions: 'Показать неактивные сессии',
@@ -5676,6 +5737,9 @@ export const ru: TranslationStructure = {
     tmuxFallback: "Запасной tmux",
     copyMetadata: "Копировать метаданные",
     copyDebugInformation: "Копировать информацию",
+    sessionInformation: "Информация о сессии",
+    happierSessionId: "ID сессии Happier",
+    providerSessionId: ({ provider }: { provider: string }) => `ID сессии ${provider}`,
     debugInformationCopyLabel: "Информация",
     providerSessionLogs: ({ provider }: { provider: string }) => `Журналы сеанса ${provider}`,
     agentState: "Состояние агента",
@@ -5688,6 +5752,9 @@ export const ru: TranslationStructure = {
     thinking: "Думает",
     thinkingSince: "Думает с",
     thinkingLevel: "Уровень размышлений",
+    peerReportFrom: ({ name }: { name: string }) => `Отчёт от ${name}`,
+    peerMessageFrom: ({ name }: { name: string }) => `Сообщение от ${name}`,
+    peerUnnamedSender: "другого агента",
     cliVersion: "Версия CLI",
     cliVersionOutdated: "Требуется обновление CLI",
     cliVersionOutdatedMessage: ({
@@ -5705,6 +5772,8 @@ export const ru: TranslationStructure = {
     deleteSessionConfirm: "Удалить сессию навсегда?",
     deleteSessionWarning:
       "Это действие нельзя отменить. Все сообщения и данные, связанные с этой сессией, будут удалены навсегда.",
+    stopAndDeleteSession: "Остановить и удалить",
+    stopAndDeleteSessionWarning: "Сессия будет остановлена, а все её сообщения и данные будут удалены навсегда. Это действие нельзя отменить.",
     failedToDeleteSession: "Не удалось удалить сессию",
     sessionDeleted: "Сессия успешно удалена",
     manageSharing: "Управление доступом",
@@ -6822,6 +6891,11 @@ export const ru: TranslationStructure = {
       },
 
     agentInput: {
+        sendOptions: {
+            title: "Варианты отправки",
+            queue: "В очередь",
+            hint: "Удерживайте, чтобы выбрать способ отправки",
+        },
         chipPicker: {
             selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}. Выбрано.`,
         },
@@ -9907,7 +9981,7 @@ settingsSession: {
       offline: "Некоторые машины не в сети",
       checkedAt: ({ time }: { time: string }) => `Последняя проверка: ${time}`,
       upToDateDescription: "Happier, его командная строка и ваши агенты в актуальном состоянии.",
-      unknownDescription: "Всё, что удалось проверить, актуально. Остальное будет проверено, как только станет доступно.",
+      unknownDescription: "Часть сведений об обновлениях недоступна или взята из кэша. Подробности указаны в соответствующих строках.",
       offlineDescription: "Всё доступное актуально. Машины не в сети будут проверены, когда вернутся.",
     },
     settingsSubtitle: {
@@ -9953,6 +10027,9 @@ settingsSession: {
       appCheckFailed: "Не удалось проверить наличие новой версии.",
       appDownloadFailed: "Загрузка не завершилась.",
       appInstallFailed: "Не удалось установить обновление.",
+      cachedRelease: "Сведения о выпуске из кэша; здесь не обновляются",
+      cachedReleaseChannel: ({ channel }: { channel: string }) => `Сведения о выпуске ${channel} из кэша; здесь не обновляются`,
+      manualUpdateInterruptsSessions: "Обновите на этом компьютере. Службы могут остановиться, а активные сеансы — завершиться.",
       latestUnknown: "Не удалось проверить наличие новой версии",
       rolledBack: ({ kept, target }: { kept: string; target: string }) => `Версия ${target} не запустилась на этой машине, поэтому осталась ${kept}.`,
       installedByYou: "Установлено вами",
@@ -10214,6 +10291,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Для подключения терминала требуется доступ к камере",
     failedToLinkDevice: "Не удалось связать устройство",
+    deviceLinkRequestNotFound: "На этом ретрансляторе не найден ожидающий запрос на привязку. Убедитесь, что оба устройства используют один и тот же ретранслятор, затем создайте новый QR-код.",
     cameraPermissionsRequiredToScanQr:
       "Для сканирования QR-кодов требуется доступ к камере",
     qrScannerUnavailable:

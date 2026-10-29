@@ -610,7 +610,8 @@ export const ja: TranslationStructure = {
         commands: {
             composerAbortConfirm: '中断を確認',
             composerFocus: 'コンポーザーにフォーカス',
-            composerSendImmediate: 'すぐに送信',
+            composerSendImmediate: '別の方法で送信（キュー / 方向修正）',
+            composerSendInterrupt: '中断して送信',
             composerSendPending: '保留キューに送信',
             commandPaletteOpen: 'コマンドパレットを開く',
             modeCycle: 'モードを切り替え',
@@ -646,6 +647,14 @@ export const ja: TranslationStructure = {
   },
 
   transcript: {
+
+    quote: {
+
+      action: '引用',
+
+      actionA11y: '選択したテキストをメッセージに引用',
+
+    },
 
     selection: {
 
@@ -1144,6 +1153,15 @@ export const ja: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "診断情報を保存",
+      diagnosticsSaveFailed: "診断情報を保存できませんでした。エラーの詳細は引き続き利用できます。もう一度試すか、コピーしてください。",
+      copyFailed: "クラッシュの詳細をコピーできませんでした。再試行してください。",
+      discardFailed: "保存されたクラッシュを破棄できませんでした。再試行してください。",
+      restartWithoutReport: "保存せずに再起動",
+      reportSaveFailed: "クラッシュの詳細を保存できませんでした。再起動する前にエラーの詳細をコピーするか、報告を再試行してください。",
+      savedReportNotice: "保存されたクラッシュを以下に表示しています。送信前に確認・編集してください。送信または破棄するまで、この端末に保持されます。",
+      discardSavedReport: "保存されたクラッシュを破棄",
+      stackTruncated: "この欄ではスタックを短縮しています。完全なクラッシュ情報はこの端末に保存されています。",
     title: "問題が発生しました",
     subtitle:
       "Happierで予期しないエラーが発生しました。アプリUIを再起動するか、サポート用に詳細をコピーできます。",
@@ -3823,6 +3841,10 @@ localTailscale: {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Windows のタイトルバーを使用',
+    nativeTitleBarSubtitle: 'Windows 標準のウィンドウ枠と操作ボタンを表示します。',
+    nativeTitleBarChangeFailed: 'タイトルバーを変更できませんでした。もう一度お試しください。',
+    nativeTitleBarPersistenceFailed: 'タイトルバーの設定を読み込むか保存することができませんでした。設定をもう一度変更して再試行してください。',
     title: 'デスクトップ',
     footer: 'このコンピューターでの Happier の動作を設定します。',
     backgroundServiceTitle: 'バックグラウンドで接続を維持',
@@ -4026,6 +4048,17 @@ localTailscale: {
         openSettingsFailed: 'システム設定を開けませんでした。',
     },
     pushTroubleshooting: {
+            remoteTest: {
+                title: "リモートテストを送信",
+                subtitle: "この Home に接続されたマシンから、この電話に実際のプッシュ通知を送信します。",
+                notRegistered: "この電話のトークンを登録してから、再試行してください。",
+                noMachine: "リモートテストを送信するには、この Home にマシンを接続してください。",
+                accepted: "プッシュサービスがテストを受け付けました。電話での受信や表示を確認したわけではありません。通知を確認してください。",
+                rejected: "プッシュサービスによる受付を確認できませんでした。再試行する前に通知と登録状態を確認してください。",
+                invalidCredentials: "プッシュプロバイダーがこのアプリの認証情報を拒否しました。APNs または FCM の設定を確認してください。",
+                unsupported: "リモートテストを送信するには、接続されたマシンの Happier CLI を更新してください。",
+                unconfirmed: "結果を確認できませんでした。リクエストはまだ完了する可能性があります。再試行する前に通知を確認してください。",
+            },
       status: {
         title: "状態",
         footer: "アカウント設定、OS 権限、サーバー登録状態を確認します。",
@@ -4170,7 +4203,12 @@ localTailscale: {
   },
 
   notifications: {
+      permissionActionNeedsReview: "通知から送信した応答を確認できませんでした。再度応答する前に、保留中のリクエストを確認してください。",
+      permissionActionReviewUnavailable: "この応答のHomeとアカウントを開けませんでした。設定で接続とサインインを確認してから、保留中のリクエストを確認してください。",
     actions: {
+          reviewPendingRequests: "保留中のリクエストを確認",
+          questionReply: "返信",
+          questionPlaceholder: "回答",
       allow: "許可",
       deny: "拒否",
       answer: "回答",
@@ -4688,6 +4726,16 @@ localTailscale: {
           },
         },
         fields: {
+          codexReasoningSummaries: {
+              title: "推論の要約",
+              footer: "会話内の表示とは個別に、Codex が要約を生成するかを設定します。セッションの開始時または再開時に適用されます。利用できるかどうかはモデルによって異なります。",
+              generation: "生成",
+              options: {
+                  default: "Codex の設定またはモデルの既定値を使用します。",
+                  enabled: "モデルが対応している場合に要約を要求します。",
+                  disabled: "推論の要約を生成しません。",
+              },
+          },
           codexBackendMode: {
             title: "Codex ルーティングモード",
             subtitle: "アプリサーバー、ACP、または MCP を選択します。",
@@ -4723,6 +4771,8 @@ localTailscale: {
 
   settingsAppearance: {
     tabBarAppearance: {
+      sideRailTitle: "サイドレールにタブを表示",
+      sideRailSubtitle: "オフにすると、Happier のタブバーとスワイプ操作を使用できます。",
       title: 'タブバー',
       footer: '下部のタブバーをカスタマイズします。',
       showLabels: 'タブのラベルを表示',
@@ -6827,6 +6877,17 @@ localTailscale: {
       presetName: 'プリセット名', movePresetUp: '上へ移動', movePresetDown: '下へ移動',
       noPresets: '保存済みプリセットはありません', noPresetsMessage: '次にカスタムリマインダーを選ぶ際に保存できます。',
     },
+    appearance: {
+      setColor: '色を設定',
+      customColor: 'カスタムカラー…',
+      customColorTitle: 'カスタムカラー',
+      customColorMessage: '色を選ぶか、16進数の値を入力してください。',
+      invalidColor: '#3A7BD5 のような16進数の値を使ってください。',
+      removeColor: '色を削除',
+      inheritedFromProject: 'プロジェクトから',
+      customColorLabel: ({ hex }: { hex: string }) => `カスタムカラー ${hex}`,
+      colors: { blue: '青', green: '緑', orange: 'オレンジ', yellow: '黄', red: '赤', indigo: '藍', purple: '紫' },
+    },
     workingSectionTitle: '処理中',
     hideInactiveSessions: '非アクティブなセッションを非表示',
     showInactiveSessions: '非アクティブなセッションを表示',
@@ -7005,6 +7066,9 @@ localTailscale: {
     tmuxFallback: "tmux フォールバック",
     copyMetadata: "メタデータをコピー",
     copyDebugInformation: "情報をコピー",
+    sessionInformation: "セッション情報",
+    happierSessionId: "Happier セッション ID",
+    providerSessionId: ({ provider }: { provider: string }) => `${provider} セッション ID`,
     debugInformationCopyLabel: "情報",
     providerSessionLogs: ({ provider }: { provider: string }) => `${provider} セッションログ`,
     agentState: "エージェント状態",
@@ -7017,6 +7081,9 @@ localTailscale: {
     thinking: "思考中",
     thinkingSince: "思考開始時刻",
     thinkingLevel: "思考レベル",
+    peerReportFrom: ({ name }: { name: string }) => `${name} からのレポート`,
+    peerMessageFrom: ({ name }: { name: string }) => `${name} からのメッセージ`,
+    peerUnnamedSender: "別のエージェント",
     cliVersion: "CLIバージョン",
     cliVersionOutdated: "CLIの更新が必要",
     cliVersionOutdatedMessage: ({
@@ -7034,6 +7101,8 @@ localTailscale: {
     deleteSessionConfirm: "セッションを完全に削除しますか？",
     deleteSessionWarning:
       "この操作は取り消せません。このセッションに関連するすべてのメッセージとデータが完全に削除されます。",
+    stopAndDeleteSession: "停止して削除",
+    stopAndDeleteSessionWarning: "セッションを停止し、すべてのメッセージとデータを完全に削除します。この操作は取り消せません。",
     failedToDeleteSession: "セッションの削除に失敗しました",
     sessionDeleted: "セッションが正常に削除されました",
     manageSharing: "共有を管理",
@@ -7093,6 +7162,11 @@ localTailscale: {
   },
 
   agentInput: {
+      sendOptions: {
+          title: "送信オプション",
+          queue: "キューに追加",
+          hint: "長押しして送信方法を選択",
+      },
       chipPicker: {
           selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}。選択中。`,
       },
@@ -10176,7 +10250,7 @@ settingsSession: {
       offline: "一部のマシンがオフラインです",
       checkedAt: ({ time }: { time: string }) => `最終確認: ${time}`,
       upToDateDescription: "Happier、コマンドライン、エージェントはすべて最新です。",
-      unknownDescription: "確認できたものはすべて最新です。残りは接続できたときに再確認します。",
+      unknownDescription: "一部の更新情報は利用できないか、キャッシュされています。該当する行で詳細を確認してください。",
       offlineDescription: "接続できるものはすべて最新です。オフラインのマシンは戻ったときに確認します。",
     },
     settingsSubtitle: {
@@ -10222,6 +10296,9 @@ settingsSession: {
       appCheckFailed: "新しいバージョンを確認できませんでした。",
       appDownloadFailed: "ダウンロードが完了しませんでした。",
       appInstallFailed: "アップデートをインストールできませんでした。",
+      cachedRelease: "キャッシュされたリリース情報（ここでは更新されません）",
+      cachedReleaseChannel: ({ channel }: { channel: string }) => `キャッシュされた ${channel} リリース情報（ここでは更新されません）`,
+      manualUpdateInterruptsSessions: "このマシンで更新してください。サービスが停止し、実行中のセッションが終了する場合があります。",
       latestUnknown: "新しいバージョンを確認できませんでした",
       rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} はこのマシンで起動しなかったため、${kept} のままです。`,
       installedByYou: "ユーザーがインストール",
@@ -10482,6 +10559,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "ターミナルの接続にはカメラの権限が必要です",
     failedToLinkDevice: "デバイスのリンクに失敗しました",
+    deviceLinkRequestNotFound: "このリレーに保留中のデバイス連携リクエストが見つかりませんでした。両方のデバイスで同じリレーを使用していることを確認し、新しいQRコードを生成してください。",
     cameraPermissionsRequiredToScanQr:
       "QRコードのスキャンにはカメラの権限が必要です",
     qrScannerUnavailable:

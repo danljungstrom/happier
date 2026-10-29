@@ -13,6 +13,7 @@ import {
 } from '@/backends/codex/appServer/testkit/fakeCodexAppServer';
 
 import { listCodexSessionCandidates } from './listCodexSessionCandidates';
+import { listCodexDirectSessionCandidatesViaRollouts } from './listCodexDirectSessionCandidatesViaRollouts';
 
 function sessionMetaLine(payload: Record<string, unknown>): string {
   return `${JSON.stringify({ type: 'session_meta', payload })}\n`;
@@ -37,6 +38,75 @@ describe('listCodexSessionCandidates', () => {
     vi.resetModules();
     vi.restoreAllMocks();
     vi.unmock('node:fs/promises');
+  });
+
+  it('excludes Guardian rollouts before paging and searching while retaining user reviews and spawned agents', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-codex-direct-guardian-'));
+    const codexHome = join(root, 'codex-home');
+    const sessions = [
+      { id: '11111111-1111-1111-1111-111111111111', source: 'cli', title: 'Guardian review', archived: false },
+      { id: '22222222-2222-2222-2222-222222222222', source: { subagent: { thread_spawn: { parent_thread_id: 'parent', depth: 1 } } }, title: 'Coding agent', archived: false },
+      { id: '33333333-3333-3333-3333-333333333333', source: { subagent: 'review' }, title: 'User review', archived: false },
+      // Source vectors: openai/codex@970111f6cb62cc02fe36a82ea7d71b37a2889c97,
+      // SessionSource.ts and SubAgentSource.ts (rollout spelling).
+      { id: '44444444-4444-4444-4444-444444444444', source: { subagent: { other: 'guardian' } }, title: 'Renamed reviewer', archived: false },
+      { id: '55555555-5555-5555-5555-555555555555', source: { subagent: { other: 'guardian' } }, title: 'Guardian review', archived: true },
+    ];
+    for (const [index, session] of sessions.entries()) {
+      const dir = join(codexHome, session.archived ? 'archived_sessions' : 'sessions');
+      await mkdir(dir, { recursive: true });
+      const file = join(dir, `rollout-2026-01-01T00-00-00-${session.id}.jsonl`);
+      await writeFile(file, sessionMetaLine({ id: session.id,
+        ...([sessions[0].id, sessions[3].id].includes(session.id) ? { base_instructions: { text: 'x'.repeat(96 * 1024) } } : {}),
+        source: session.source,
+      })
+        + responseItemLine({ type: 'message', role: 'user', content: [{ type: 'text', text: session.title }] }));
+      await utimes(file, new Date(1000 + index), new Date(1000 + index));
+    }
+    const params = {
+      source: { kind: 'codexHome' as const, home: 'user' as const },
+      activeServerDir: join(root, 'servers', 'cloud'),
+      env: createDirectSessionsEnv(codexHome),
+      limit: 2,
+      searchMode: 'fast' as const,
+    };
+    const first = await listCodexSessionCandidates(params);
+    expect(first.candidates.map((candidate) => candidate.remoteSessionId)).toEqual([sessions[2].id, sessions[1].id]);
+    expect(first.nextCursor).toBeTruthy();
+    const second = await listCodexSessionCandidates({ ...params, cursor: first.nextCursor ?? undefined });
+    expect(second.candidates.map((candidate) => candidate.remoteSessionId)).toEqual([sessions[0].id]);
+    expect(second.nextCursor).toBeNull();
+    const byId = await listCodexSessionCandidates({ ...params, searchTerm: sessions[3].id });
+    expect(byId.candidates).toEqual([]);
+    expect(byId.nextCursor).toBeNull();
+    const byTitle = await listCodexDirectSessionCandidatesViaRollouts({ ...params, searchMode: 'full', searchTerm: 'Guardian review' });
+    expect(byTitle.candidates.map((candidate) => candidate.remoteSessionId)).toEqual([sessions[0].id]);
+    expect(byTitle.totalCount).toBe(1);
+  });
+
+  it('does not reintroduce Guardian sessions when merging app-server and rollout discovery', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-codex-direct-guardian-merge-'));
+    const codexHome = join(root, 'codex-home');
+    await mkdir(join(codexHome, 'sessions'), { recursive: true });
+    const guardianId = 'aaaaaaaa-1111-1111-1111-111111111111';
+    await writeFile(join(codexHome, 'sessions', `rollout-2026-01-01T00-00-00-${guardianId}.jsonl`),
+      sessionMetaLine({ id: guardianId, source: { subagent: { other: 'guardian' } } }));
+    const fakeAppServer = await writeFakeCodexAppServerThreadListScript({
+      dir: root,
+      nonArchivedThreads: [
+        { id: guardianId, source: { subAgent: { other: 'guardian' } }, name: 'Renamed reviewer' },
+        { id: 'user-session', source: 'cli', name: 'Guardian review' },
+      ],
+      archivedThreads: [{ id: 'archived-guardian', source: { subAgent: { other: 'guardian' } } }],
+    });
+    const result = await listCodexSessionCandidates({
+      source: { kind: 'codexHome', home: 'user' },
+      activeServerDir: join(root, 'servers', 'cloud'),
+      env: createDirectSessionsEnv(codexHome, { HAPPIER_CODEX_APP_SERVER_BIN: fakeAppServer }),
+      limit: 10,
+    });
+    expect(result.candidates.map((candidate) => candidate.remoteSessionId)).toEqual(['user-session']);
+    expect(result.nextCursor).toBeNull();
   });
 
   it('lists sessions from CODEX_HOME with archived flags and paging', async () => {
@@ -225,7 +295,7 @@ describe('listCodexSessionCandidates', () => {
       .toEqual(expect.objectContaining({ cwd: '/repo/metadata-match' }));
   });
 
-  it('does not read rollout metadata for sessions outside the requested page when no search term is provided', async () => {
+  it('reads only metadata heads for sessions outside the requested page when no search term is provided', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-codex-direct-list-page-only-'));
     const codexHome = join(root, 'codex-home');
     const sessionsDir = join(codexHome, 'sessions');
@@ -247,10 +317,11 @@ describe('listCodexSessionCandidates', () => {
 
     await writeFile(newest, sessionMetaLine({ id: newestSessionId, timestamp: '2026-01-03T00:00:00.000Z', cwd: '/repo/newest' }), 'utf8');
     await writeFile(middle, sessionMetaLine({ id: middleSessionId, timestamp: '2026-01-02T00:00:00.000Z', cwd: '/repo/middle' }), 'utf8');
-    await writeFile(oldest, sessionMetaLine({ id: oldestSessionId, timestamp: '2026-01-01T00:00:00.000Z', cwd: '/repo/oldest' }), 'utf8');
+    const largeBody = responseItemLine({ type: 'message', role: 'user', content: [{ type: 'text', text: 'x'.repeat(256 * 1024) }] });
+    await writeFile(oldest, sessionMetaLine({ id: oldestSessionId, timestamp: '2026-01-01T00:00:00.000Z', cwd: '/repo/oldest' }) + largeBody, 'utf8');
     await writeFile(
       offPageContinuation,
-      sessionMetaLine({ id: offPageContinuationThreadId, timestamp: '2025-12-31T00:00:00.000Z', cwd: '/repo/off-page-continuation' }),
+      sessionMetaLine({ id: offPageContinuationThreadId, timestamp: '2025-12-31T00:00:00.000Z', cwd: '/repo/off-page-continuation' }) + largeBody,
       'utf8',
     );
 
@@ -259,20 +330,17 @@ describe('listCodexSessionCandidates', () => {
     await utimes(oldest, new Date('2026-01-01T00:00:00.000Z'), new Date('2026-01-01T00:00:00.000Z'));
     await utimes(offPageContinuation, new Date('2025-12-31T00:00:00.000Z'), new Date('2025-12-31T00:00:00.000Z'));
 
-    let offPageContinuationMetadataOpened = false;
+    const offPageReads: Array<{ mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> } }> = [];
     vi.doMock('node:fs/promises', async (importOriginal) => {
       const actual = await importOriginal<typeof import('node:fs/promises')>();
       return {
         ...actual,
-        open: async (filePath: Parameters<typeof actual.open>[0], ...args: Parameters<typeof actual.open> extends [any, ...infer Rest] ? Rest : never) => {
-          if (String(filePath).includes(oldestSessionId)) {
-            throw new Error('sentinel rollout metadata should not be opened for first-page listing');
+        open: async (...args: Parameters<typeof actual.open>) => {
+          const handle = await actual.open(...args);
+          if ([oldestSessionId, offPageContinuationThreadId].some((id) => String(args[0]).includes(id))) {
+            offPageReads.push(vi.spyOn(handle, 'read'));
           }
-          if (String(filePath).includes(offPageContinuationThreadId)) {
-            offPageContinuationMetadataOpened = true;
-            throw new Error('sentinel continuation metadata should not be opened to derive its filename ID');
-          }
-          return actual.open(filePath, ...args);
+          return handle;
         },
       };
     });
@@ -295,7 +363,10 @@ describe('listCodexSessionCandidates', () => {
       }),
     ]);
     expect(first.nextCursor).toBeTruthy();
-    expect(offPageContinuationMetadataOpened).toBe(false);
+    // Source classification needs each head, but off-page transcript bodies must stay unread.
+    // rolloutDiscovery's metadata reader consumes one 4 KiB chunk for these short headers.
+    expect(offPageReads).toHaveLength(2);
+    expect(offPageReads.flatMap((spy) => spy.mock.calls).every((call) => typeof call[2] === 'number' && call[2] <= 4096)).toBe(true);
   });
 
   it('matches search terms against surfaced session titles', async () => {

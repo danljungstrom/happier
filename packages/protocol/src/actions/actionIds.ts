@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lazySchema } from '../lazySchema.js';
 
 export const ACTION_IDS = [
   // Action discovery
@@ -95,7 +96,7 @@ export const ACTION_IDS = [
   'approval.request.decide',
 ] as const;
 
-export const ActionIdSchema = z.enum(ACTION_IDS);
+export const ActionIdSchema = lazySchema(() => z.enum(ACTION_IDS));
 export type ActionId = z.infer<typeof ActionIdSchema>;
 
 const LEGACY_ACTION_ID_ALIASES: Readonly<Record<string, ActionId>> = Object.freeze({

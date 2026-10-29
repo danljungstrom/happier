@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { RpcError } from '../rpcErrors.js';
 import { createActionExecutor, type ActionExecutorDeps } from './actionExecutor.js';
 
 function createExecutor(overrides: Partial<ActionExecutorDeps> = {}) {
@@ -49,6 +50,24 @@ function createExecutor(overrides: Partial<ActionExecutorDeps> = {}) {
 }
 
 describe('createActionExecutor (session control)', () => {
+  it.each([
+    { rejection: new RpcError('Request no longer pending', 'permission_request_not_found'), expectedCode: 'permission_request_not_found' },
+    { rejection: Object.assign(new Error('Session missing'), { code: 'session_not_found' }), expectedCode: 'session_not_found' },
+    { rejection: Object.assign(new Error('Connection refused'), { code: 'ECONNREFUSED' }), expectedCode: 'server_unreachable' },
+    { rejection: Object.assign(new Error('Unclassified failure'), { code: 'private_adapter_code' }), expectedCode: 'action_failed' },
+    { rejection: { rpcErrorCode: 'private_adapter_code', message: 'Unclassified carrier' }, expectedCode: 'action_failed' },
+  ])('preserves the public action error classification $expectedCode', async ({ rejection, expectedCode }) => {
+    const executor = createExecutor({
+      // The host's outbound operation reports its genuine RPC/system error.
+      sessionPermissionRespond: async () => { throw rejection; },
+    });
+    await expect(executor.execute(
+      'session.permission.respond',
+      { sessionId: 's1', requestId: 'request1', decision: 'allow' },
+      { surface: 'voice_tool' },
+    )).resolves.toMatchObject({ ok: false, errorCode: expectedCode });
+  });
+
   it('executes session.message.send via deps.sessionSendMessage (including optional overrides)', async () => {
     const sessionSendMessage = vi.fn(async () => ({ ok: true }));
     const executor = createExecutor({ sessionSendMessage });

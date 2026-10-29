@@ -520,12 +520,6 @@ async function executeMoveToFolderAction(params: Readonly<{
         targets: params.targets,
         context: params.context,
         runTarget: async (target) => {
-            if (target.canMoveToFolder === false) {
-                return createTargetResult(target, 'skipped', {
-                    reasonCode: 'folder_assignment_unavailable',
-                    reason: 'Session folder assignment is unavailable',
-                });
-            }
             await setSessionFolderAssignment({
                 target,
                 folderId: params.action.folderId,

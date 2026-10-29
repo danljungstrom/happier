@@ -1,4 +1,5 @@
 import { readStoredSessionMessagesReadProjectionFromStateLike } from '@/sync/domains/messages/readStoredSessionMessages';
+import { deriveSessionWorkObservation } from '@/sync/domains/session/attention/deriveSessionWorkObservation';
 import {
     deriveSessionListAttentionState,
     deriveSessionListMeaningfulActivityAt,
@@ -31,6 +32,7 @@ import {
 } from '@/components/sessions/workState/sessionActivityPresentation';
 import { formatShortRelativeTimeAt } from '@/utils/time/formatShortRelativeTime';
 import { t } from '@/text';
+import { resolveEffectiveSessionAppearanceColor } from '@/sync/domains/session/organization/appearanceColor';
 import { sessionTagKey } from '../sessionTagUtils';
 import { treeRowId } from '../drop-resolution/treeRowId';
 import {
@@ -281,6 +283,7 @@ function resolveRowSubtitle(input: Readonly<{
 
 export function buildSessionListRowModel(input: BuildSessionListRowModelInput): SessionListRowModel {
     const { item, settings } = input;
+    const appearanceColor = resolveEffectiveSessionAppearanceColor({ sessionColor: input.state?.appearanceColor });
     const sessionId = String(item.session.id);
     const serverId = normalizeNonEmptyString(item.serverId);
     const rowKey = serverId ? sessionTagKey(serverId, sessionId) : sessionId;
@@ -398,6 +401,7 @@ export function buildSessionListRowModel(input: BuildSessionListRowModelInput): 
 
     return {
         rowKey,
+        appearanceColor,
         sessionId,
         serverId,
         serverName: item.serverName,
@@ -413,7 +417,8 @@ export function buildSessionListRowModel(input: BuildSessionListRowModelInput): 
             rowState: rowAttentionState,
         },
         presentation,
-        workingIndicatorPaused: presentsRetainedWorking,
+        workingIndicatorPaused: presentsRetainedWorking || (status.state === 'background_active'
+            && deriveSessionWorkObservation(resolvedSession, settings.runtimeNowMs).state === 'unobserved'),
         activity: {
             mode: activityMode,
             timestamp: activityTimestamp,

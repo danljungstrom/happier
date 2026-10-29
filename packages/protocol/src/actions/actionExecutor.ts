@@ -55,6 +55,8 @@ import {
   type SpawnConfigOptionValue,
 } from './sessionSpawnConfigOptions.js';
 import { EXECUTION_RUN_ACTION_PERMISSION_MODES } from './executionRunActionPermissionMode.js';
+import { isRpcError, readRpcErrorCode } from '../rpcErrors.js';
+import { lazySchema } from '../lazySchema.js';
 
 /**
  * Resolve the canonical run-start model + config-option selection from an agent-facing action
@@ -608,7 +610,7 @@ function hasOwn(input: any, key: string): boolean {
   return Boolean(input && Object.prototype.hasOwnProperty.call(input, key));
 }
 
-const ActionSurfaceKeySchema = ActionSurfaceSchema.keyof();
+const ActionSurfaceKeySchema = lazySchema(() => ActionSurfaceSchema.keyof());
 
 function parseActionSurfaceKey(value: unknown): keyof ActionSurfaces | null {
   const parsed = ActionSurfaceKeySchema.safeParse(value);
@@ -1229,6 +1231,15 @@ function normalizeActionExecutorThrownError(error: unknown): Readonly<{ errorCod
         : typeof anyErr?.message === 'string'
           ? String(anyErr.message)
         : '';
+
+  const rpcErrorCode = isRpcError(error) ? readRpcErrorCode(error)?.trim() : undefined;
+  if (rpcErrorCode) {
+    return {
+      errorCode: rpcErrorCode,
+      error: message || rpcErrorCode,
+      ...(details !== undefined ? { details } : {}),
+    };
+  }
 
   if (rawCode && SessionControlErrorCodeSchema.safeParse(rawCode).success) {
     return {

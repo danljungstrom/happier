@@ -293,7 +293,7 @@ export const CLAUDE_PROVIDER_SETTINGS_PLUGIN: ProviderSettingsPlugin = {
                     subtitle: { key: 'settingsProviders.plugins.claude.fields.claudeLocalPermissionBridgeTimeoutSeconds.subtitle' },
                     numberSpec: {
                         min: 1,
-                        step: 30,
+                        step: 1,
                         placeholder: '600',
                     },
                 },
@@ -310,7 +310,7 @@ export const CLAUDE_PROVIDER_SETTINGS_PLUGIN: ProviderSettingsPlugin = {
                     subtitle: { key: 'settingsProviders.plugins.claude.fields.claudeRemoteMaxThinkingTokens.subtitle' },
                     numberSpec: {
                         min: 1,
-                        step: 100,
+                        step: 1,
                         placeholder: { key: 'common.default' },
                     },
                 },

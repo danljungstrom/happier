@@ -71,21 +71,20 @@ export async function sendVoiceTextTurn(params: {
     resolveVoiceSessionBindingByControlSessionId({ controlSessionId: sessionId })
     ?? resolveVoiceSessionBindingByConversationSessionId({ conversationSessionId: sessionId })
     ?? null;
-  const syntheticTranscriptBinding = resolveVoiceSessionBindingByControlSessionId({ controlSessionId: sessionId });
   const syntheticConversationSessionId =
-    syntheticTranscriptBinding?.transcriptMode === 'synthetic'
-      ? syntheticTranscriptBinding.conversationSessionId
+    sessionBinding?.transcriptMode === 'synthetic'
+      ? sessionBinding.conversationSessionId
       : null;
   const currentToolSessionId =
     sessionBinding?.targetSessionId
     ?? (sessionId === VOICE_AGENT_GLOBAL_SESSION_ID ? null : sessionId);
 
   if (conversationMode === 'agent' && !params.durableDispatch) {
-    if (!syntheticConversationSessionId) {
+    if (!sessionBinding) {
       throw new Error('voice_session_binding_required');
     }
     const result = await submitDurableVoiceTextTurn({
-      conversationSessionId: syntheticConversationSessionId,
+      conversationSessionId: sessionBinding.conversationSessionId,
       text: userText,
       pendingPort: params.pendingPort,
       dispatch: async (durableDispatch) => {
@@ -251,7 +250,7 @@ export async function sendVoiceTextTurn(params: {
       return;
     } catch (error) {
       // An aborted turn hands state back to whoever aborted it (cancel or hang-up).
-      if (isTurnAbortedError(error) || params.signal?.aborted) return;
+      if (isTurnAbortedError(error) || params.signal?.aborted) throw error;
       voiceActivityController.appendError(sessionId, adapterId, 'voice_agent_send_failed', error instanceof Error ? error.message : 'send_failed');
       patchLocalVoiceState({ status: 'idle', sessionId, ...resolveLocalVoiceError(error, 'send_failed') });
       throw error instanceof Error ? error : new Error('send_failed');

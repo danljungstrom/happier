@@ -3,6 +3,7 @@ import { createHappierMetaEnvelopeSchema } from '../structuredMessages/HappierMe
 
 import { createSentFromSchema } from '../sentFrom.js';
 import { createSessionPermissionModeSchema } from '../sessionMetadata/sessionPermissionModes.js';
+import { lazySchema } from '../lazySchema.js';
 
 export type SessionUserMessageDeliveryIntentV1 =
   | 'default'
@@ -80,5 +81,5 @@ export function createSessionMessageMetaSchema(zod: typeof z) {
     .passthrough();
 }
 
-export const SessionMessageMetaSchema = createSessionMessageMetaSchema(z);
+export const SessionMessageMetaSchema = lazySchema(() => createSessionMessageMetaSchema(z));
 export type SessionMessageMeta = z.infer<typeof SessionMessageMetaSchema>;

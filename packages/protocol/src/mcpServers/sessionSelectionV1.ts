@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lazySchema } from '../lazySchema.js';
 
 function dedupeStrings(values: ReadonlyArray<string>): string[] {
   const seen = new Set<string>();
@@ -11,7 +12,7 @@ function dedupeStrings(values: ReadonlyArray<string>): string[] {
   return out;
 }
 
-export const SessionMcpSelectionV1Schema = z
+export const SessionMcpSelectionV1Schema = lazySchema(() => z
   .preprocess(
     (raw) => {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
@@ -28,14 +29,14 @@ export const SessionMcpSelectionV1Schema = z
     ...value,
     forceIncludeServerIds: dedupeStrings(value.forceIncludeServerIds),
     forceExcludeServerIds: dedupeStrings(value.forceExcludeServerIds),
-  }));
+  })));
 
 export type SessionMcpSelectionV1 = z.infer<typeof SessionMcpSelectionV1Schema>;
 
-export const SessionMcpSelectionRestartRequiredV1Schema = z.object({
+export const SessionMcpSelectionRestartRequiredV1Schema = lazySchema(() => z.object({
   v: z.literal(1),
   appliedSelection: SessionMcpSelectionV1Schema,
-});
+}));
 
 export type SessionMcpSelectionRestartRequiredV1 = z.infer<typeof SessionMcpSelectionRestartRequiredV1Schema>;
 

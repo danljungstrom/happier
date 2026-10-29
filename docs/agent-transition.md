@@ -43,6 +43,12 @@ the Agent, and not forking, which creates a new Session.
 | Arming, arm scope, and the transition's correlation id | `apps/ui/sources/components/sessions/agentPicker/useInSessionAgentPickerControls.tsx` |
 | Which destination one composer send reaches | `apps/ui/sources/sync/domains/session/input/resolveSessionComposerSendDestination.ts` |
 
+In development source, an armed continuation is a submit intent even when the
+composer is blank. `resolveSessionComposerSend` supplies the localized
+`common.continue` prompt only when there is no authored text, attachment or
+included review comment. The original draft remains the compare-clear snapshot;
+the existing transition submission retains the resolved input for retries.
+
 Machine RPCs (`packages/protocol/src/rpc.ts`, registered in
 `apps/cli/src/api/machine/rpcHandlers.ts`):
 
@@ -196,6 +202,14 @@ view (CAS on `metadataVersion`/`agentStateVersion`), then appends the divider
 through the canonical message owner. Missing, conflicting, unreadable, or
 unverifiable divider evidence after that committed view maps to the one public
 `divider_unavailable` result; storage-specific evidence stays internal.
+
+In current development source, the cutover also retires the departed Agent's
+current turn and runtime-issue projection. It advances the previous observation
+timestamp in the runner's clock domain and publishes that clear alongside the
+target identity. Historical `SessionTurn` rows and their failures remain intact.
+Later transcript-anchor or provider-id
+bookkeeping updates those historical rows without selecting them as current.
+An exact cutover retry leaves the target runtime's new status and issue intact.
 
 **7.4 Admit input, then activate.** Input custody is taken **before** the target
 runtime is started, matching this tree's `sendSessionMessage` invariant:

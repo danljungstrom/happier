@@ -4,6 +4,8 @@ This document is an implementation inventory for the current low-level Codex int
 
 ## Status legend
 
+In development source, Direct discovery excludes Codex's internal Guardian approval-review sessions before paging and searching. Both rollout discovery and app-server listing use `isCodexGuardianReviewSource` to recognize the vendor source metadata; session titles do not control visibility. Ordinary review sessions and spawned coding agents retain their existing visibility. This is a discovery filter, so native session files and existing session links are preserved.
+
 - `supported`: primary or fully wired path
 - `partial`: works, but only on some transports or with notable gaps
 - `legacy`: still wired, but no longer the preferred path
@@ -60,6 +62,34 @@ Codex 0.162's app-server bootstrap cannot select the terminal's named profiles, 
 this bootstrap does not establish cold-start readiness for a custom profile's
 different SQLite location. No partial profile configuration loader is introduced.
 Windows native execution remains unverified for this storage change.
+
+## Reasoning summaries (development)
+
+`packages/protocol/src/providers/codex/reasoningSummary.ts` owns the account
+preference policy. The provider setting `codexReasoningSummaries` defaults to
+`default`, which omits a Happier override and preserves native Codex configuration
+and model behavior. `enabled` requests `auto`; `disabled` requests `none`. The
+agents provider field and provider-owned settings UI reuse this policy. Generation
+is independent of `sessionThinkingDisplayMode` and does not change reasoning
+effort. Runtime adapters apply the choice when starting or resuming a Codex session.
+
+The App Server runtime also sends an explicit choice on `turn/start`, using the
+preference captured when that runtime opens. Thread configuration alone is
+insufficient when rejoining a loaded thread: Codex CLI 0.162.1 can ignore
+`thread/resume` configuration while existing subscribers still observe that
+thread. `default` omits the turn override as well as the thread override.
+
+`apps/cli/src/backends/codex/utils/readCodexReasoningText.ts` reads only exposed
+plaintext from native app-server items and rollout response items. The live event
+bridge, native-history projection, and rollout mapper share that reader. The
+shared rollout action projector carries thinking into both Direct transcript
+messages and terminal mirroring; it preserves child-session sidechains. No path
+uses `encrypted_content` as a readable transcript source.
+
+Model support remains external. Bounded connected-service probes of Codex CLI
+0.162.1 with GPT-6.1 Sol accepted `auto` and `none` but returned empty readable
+reasoning for both a short task and a constraint puzzle. Those observations do not
+establish a universal model limitation or the incremental cost of summaries.
 
 ## Tests and QA surfaces
 

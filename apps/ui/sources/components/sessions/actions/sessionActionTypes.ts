@@ -25,7 +25,8 @@ export type SessionActionId =
     | 'ui.session.tags.edit'
     | 'ui.session.move-to-folder'
     | 'ui.session.set-attention-standing'
-    | 'ui.session.clear-attention-standing';
+    | 'ui.session.clear-attention-standing'
+    | 'ui.session.appearance-color';
 
 export type SessionAttentionStandingAction =
     | { kind: 'set-standing'; visible: true; targetStanding: true }
@@ -47,10 +48,10 @@ export type SessionActionTarget = Readonly<{
     hasAdminAccess: boolean;
     canStop: boolean;
     canArchive: boolean;
-    canMoveToFolder: boolean;
     canRename: boolean;
     canResume: boolean;
     canDelete: boolean;
+    canStopAndDelete: boolean;
     readStateAction: SessionReadStateAction;
     attentionStandingAction: SessionAttentionStandingAction;
 }>;
@@ -86,7 +87,7 @@ export type SessionActionExecutionOperations = Readonly<{
     unarchiveSession?: (sessionId: string, opts?: Readonly<{ serverId?: string | null }>) => Promise<SessionActionOperationResult>;
     renameSession?: (sessionId: string, title: string, opts?: Readonly<{ serverId?: string | null }>) => Promise<SessionActionOperationResult>;
     resumeSession?: (sessionId: string) => void | Promise<void>;
-    deleteSession?: (sessionId: string, opts?: Readonly<{ serverId?: string | null }>) => Promise<SessionActionOperationResult>;
+    deleteSession?: (sessionId: string, opts?: Readonly<{ serverId?: string | null }> & SessionArchiveRequestOptions) => Promise<SessionActionOperationResult>;
     setPinned?: (
         sessionId: string,
         pinned: boolean,

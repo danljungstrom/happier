@@ -20,7 +20,9 @@ Do not introduce direct product-runtime calls to:
 - shell installers from UI/daemon/runtime code
 - PATH-only provider detection as the sole source of truth
 
-These are allowed only behind centralized managed runtime/tooling abstractions.
+These calls require the canonical runtime/tooling owner. Happier-owned prerequisites
+use managed runtimes; explicitly configured external commands retain the user's
+chosen executable and its prerequisites.
 
 Before adding or changing a provider/runtime/install/update flow, classify it as one of:
 
@@ -31,6 +33,23 @@ Before adding or changing a provider/runtime/install/update flow, classify it as
 - managed JS-runtime dependent
 
 Provider detection, install status, daemon validation, runtime spawning, and UI/installables must reuse the same source of truth. Backend CLIs should prefer user/system installs by default over Happier-managed installs unless an explicit setting says otherwise.
+
+In current development source (not yet released), MCP package-runner resolution
+honors configured `npx`, `npm`, `yarn`, `pnpm`, and `bunx` commands, including explicit
+executable paths. `normalizePackageRunnerInvocation` resolves the executable using
+the configured environment while preserving its arguments; MCP materialization
+launches it in the session directory. A missing executable produces an actionable
+prerequisite warning, or an error in strict mode. It never triggers managed pnpm
+bootstrap or a substitute runner, including after an execution error. Managed pnpm
+remains the installation tool for Happier-owned managed packages.
+
+In current development source (not yet released), managed pnpm and JavaScript
+runtime bootstrap accept the shared `ManagedToolBootstrapOptions`: an abort signal
+and progress callbacks for lock waiting, release lookup, download bytes, and
+installation. Their lock waits and downloads honor cancellation; failed bootstrap
+propagates its error instead of silently falling back to a PATH command. Installers
+that expose progress and errors consume these signals through their existing
+output. This adds no elapsed-time cutoff, persistent cooldown, or download resume.
 
 In current development source, Windows command discovery and invocation share
 `packages/cli-common/windowsCommandInvocation.mjs`. A recognized npm wrapper that
@@ -66,6 +85,22 @@ An unresolved required CLI throws `ProviderCliNotFoundError` at the shared comma
 boundary. The primary-session classifier preserves it as `dependency_failure` with code
 `provider_cli_not_found` and the canonical remediation, without exposing raw paths or
 mistaking runner turn allocation for provider prompt acceptance.
+
+In current development source (not yet released), Windows x64 CLI and hstack payloads carry
+`happier-service-launcher.exe`, the native task launcher described in
+[CLI architecture](cli-architecture.md), beside their executable; the npm CLI and stack packages
+carry it under the bundled cli-common package at `native/windows/bin/windows-x64/`. It is a
+release-time artifact built from `packages/cli-common/native/windows/service-launcher.cpp` by
+`scripts/pipeline/release/build-windows-service-launcher.mjs` in the Windows release job, and the
+existing Ubuntu jobs consume that exact build. Installed hosts never compile it, and source
+checkouts must run the build script before installing a Windows service. A self-contained binary
+resolves the launcher from its runtime root
+(`packages/cli-common/src/firstPartyRuntime/resolveSelfContainedCliRuntimeRoot.ts`, the same root
+the CLI's `resolveCliRuntimeAssetPath` uses): a `~/.happier/bin/happier|hprev|hdev` shortcut is a
+hardlink or copy, so it maps to `~/.happier/<cli root>/current`; any other self-contained binary
+uses its own directory. Node and Bun processes use the package asset. Windows hstack has no
+supported shortcut installer today, so a binary hstack resolves the launcher beside itself; a
+future Windows hstack shortcut must be added to that runtime-root mapping.
 
 ## Installer GitHub authentication
 
@@ -546,7 +581,15 @@ types and helpers, including Homebridge's unconditionally imported `prebuild-fil
 The shared PTY permission owner
 repairs `spawn-helper` in both build and prebuild locations during package installation and
 artifact finalization. Foreign `ps-list` fastlist executables are omitted on non-Windows targets;
-Windows keeps them. Happier's Agent SDK runner always supplies the separately installed Claude
+Windows keeps them. In current development source, the shared Bun compiler loads `ps-list`
+on Windows from the existing on-disk dependency payload through the canonical CLI runtime-root resolver,
+including installed channel shortcuts. This preserves the dependency's own parser and Windows
+helper lookup: bundling its `import.meta.url` would point at Bun's virtual filesystem instead.
+POSIX keeps the dependency's JavaScript embedded, including in detached installer runners.
+The legacy Claude SDK launcher records unverified process cleanup through the existing
+primary-session turn lifecycle, allocating a failed turn when idle, before preserving the
+resume identity and exiting. Failed issue publication is logged and does not admit a replacement.
+Happier's Agent SDK runner always supplies the separately installed Claude
 Code executable, so standalone artifacts keep the SDK's JavaScript package but omit its unused
 optional native CLI fallback packages. Target-specific standalone payloads retain executable
 source maps for Bun and Node diagnostics and dependency declarations for SDK/plugin authoring.
@@ -563,8 +606,11 @@ unchanged; missing, shadowed, divergent, peer-dependent, or linked copies are re
 
 In current development source, the PTY provider uses the existing Python relay on
 POSIX Bun. Both native packages use `tty.ReadStream` for a nonblocking PTY master;
-the bundled Bun 1.4.2 can return a successful spawn without working input/output
-([upstream issue](https://github.com/oven-sh/bun/issues/25822)). Module-load success
+Bun can return a successful spawn without working input/output
+([upstream issue](https://github.com/oven-sh/bun/issues/25822), reported on macOS through
+Bun 1.4.2 and still open). On Linux x64, a `node-pty` interactive input/output and exit probe
+passes on both Bun 1.4.2 and the bundled 1.4.4, so it cannot show the issue is fixed; macOS has
+not been re-checked on 1.4.4. Module-load success
 therefore cannot establish backend usability. Re-enable native POSIX selection
 only after the bundled runtime passes interactive input/output and cleanup checks.
 The relay requires Python 3, applies the initial window size, and reports

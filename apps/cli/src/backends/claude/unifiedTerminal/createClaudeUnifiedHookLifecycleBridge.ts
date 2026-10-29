@@ -25,7 +25,7 @@ import {
 } from '../connectedServices/mapClaudeRateLimitEventToUsageDetails';
 import type { RawJSONLines } from '../types';
 import type { SessionHookData } from '../utils/startHookServer';
-import { isSidechainSessionHook } from '../utils/sessionHookAttribution';
+import { isLivePrimaryClaudeProviderHook, isSidechainSessionHook } from '../utils/sessionHookAttribution';
 import type {
   ClaudeUnifiedInputArbiter,
   ClaudeUnifiedPromptBatch,
@@ -166,6 +166,8 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
   }>) => void) | undefined;
   onTrustedHookActivation?: (() => void) | undefined;
   onTrustedProviderProgress?: (() => void) | undefined;
+  onProviderEvent?: (() => void) | undefined;
+  readProviderSessionId?: (() => string | null) | undefined;
   /**
    * Authenticated primary-session lifecycle evidence that Claude may have changed the visible TUI.
    * The terminal screen controller remains the sole dialog owner; this is only an event-driven
@@ -198,7 +200,7 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
   let terminalSideEffects: Promise<void> = Promise.resolve();
   let anonymousPermissionBlockCount = 0;
   let nativeResumeContinuationPending = false;
-  const pendingPermissionRequestIds = new Set<string>();
+  const permissionBlockCountByRequestId = new Map<string, number>();
 
   const clearQuietDrainTimer = (): void => {
     if (!quietDrainTimer) return;
@@ -436,13 +438,13 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
   };
 
   const hasPendingPermissionBlock = (): boolean => (
-    anonymousPermissionBlockCount > 0 || pendingPermissionRequestIds.size > 0
+    anonymousPermissionBlockCount > 0 || permissionBlockCountByRequestId.size > 0
   );
 
   const observePermissionBlocked = (data: SessionHookData): void => {
     const requestId = readHookRequestId(data);
     if (requestId) {
-      pendingPermissionRequestIds.add(requestId);
+      permissionBlockCountByRequestId.set(requestId, (permissionBlockCountByRequestId.get(requestId) ?? 0) + 1);
     } else {
       anonymousPermissionBlockCount += 1;
     }
@@ -455,11 +457,17 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
   ): void => {
     if (optsOverride?.releaseAll === true) {
       anonymousPermissionBlockCount = 0;
-      pendingPermissionRequestIds.clear();
+      permissionBlockCountByRequestId.clear();
     } else {
       const requestId = readHookRequestId(data);
       if (requestId) {
-        pendingPermissionRequestIds.delete(requestId);
+        const count = permissionBlockCountByRequestId.get(requestId) ?? 0;
+        // Each hook transport completes independently; PostToolUse proves the shared provider request ended.
+        if (readHookEventName(data) === 'PermissionRequestCompleted' && count > 1) {
+          permissionBlockCountByRequestId.set(requestId, count - 1);
+        } else {
+          permissionBlockCountByRequestId.delete(requestId);
+        }
       } else if (anonymousPermissionBlockCount > 0) {
         anonymousPermissionBlockCount -= 1;
       }
@@ -591,6 +599,7 @@ export function createClaudeUnifiedHookLifecycleBridge(opts: Readonly<{
         // session end. Per-request permission accounting and account-level
         // StopFailure usage evidence remain valid from sidechains.
         const sidechain = isSidechainSessionHook(data);
+        if (!observation?.startupReplay && isLivePrimaryClaudeProviderHook(data, opts.readProviderSessionId?.())) opts.onProviderEvent?.();
         if (isClaudeUnifiedTrustedHookActivationEvidence(data)) {
           opts.onTrustedHookActivation?.();
         }

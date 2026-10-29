@@ -1,16 +1,13 @@
-import { render } from "ink";
 import { Session } from "./session";
 import type { Metadata } from '@/api/types';
 import { deriveActivitySummaryFromAgentState } from '@/api/session/deriveActivitySummaryFromAgentState';
 import { CLAUDE_REMOTE_PROVIDER_FIELDS, CLAUDE_REMOTE_PROVIDER_SETTINGS_DEFAULTS } from '@happier-dev/agents';
 import { MessageBuffer } from "@/ui/ink/messageBuffer";
-import { RemoteModeDisplay } from "@/backends/claude/ui/RemoteModeDisplay";
-import React from "react";
 import {
     claudeRemoteDispatch,
     type ClaudeRemoteRunnerKind,
 } from "./remote/claudeRemoteDispatch";
-import { ClaudeResumeSessionUnavailableError } from './remote/sessionStartPlan';
+import { ClaudeResumeSessionUnavailableError } from './utils/claudeCheckSession';
 import {
     prepareClaudeUnifiedStartupLifecycle,
     type ClaudeUnifiedStartupLifecycleIntent,
@@ -133,6 +130,8 @@ import {
     observeClaudeProviderTaskRuntimeActivityHook,
     observeClaudeProviderTaskRuntimeActivityRow,
 } from './remote/runtimeActivityEvidence';
+import { isLivePrimaryClaudeProviderHook } from './utils/sessionHookAttribution';
+import type { SessionHookData } from './utils/startHookServer';
 import {
     hashClaudeEnhancedModeForQueue,
     hashClaudeEnhancedModeForLaunch,
@@ -167,7 +166,6 @@ import { surfacePrimarySessionRuntimeIssue } from '@/agent/runtime/session/error
 import { createClaudeUnifiedTerminalMetadataModeApplier } from './unifiedTerminal/metadataRuntimeModeApplier';
 import { createClaudeUnifiedTerminalSharedCallbacks } from './unifiedTerminal/createClaudeUnifiedTerminalSharedCallbacks';
 import { resolveClaudeSubscriptionRefreshSelectionFromEnv } from './connectedServices/claudeSubscriptionAccessTokenRefresh';
-import { readClaudeMainChainAssistantModelId } from './sessionModels/readClaudeMainChainAssistantModelId';
 
 function mergeSessionWorkStateIntoMetadata(
     metadata: Metadata,
@@ -333,13 +331,6 @@ function resolveClaudeCurrentModelIdFromMetadata(metadata: Record<string, unknow
     return acpCurrent || null;
 }
 
-function readClaudeSdkEffectiveModelId(message: SDKMessage): string | null {
-    if (message.type === 'system') {
-        return readNonEmptyString((message as Record<string, unknown>).model);
-    }
-    return readClaudeMainChainAssistantModelId(message);
-}
-
 async function formatClaudeCodeArtifactsTailForUi(artifacts: ClaudeCodeArtifacts): Promise<string> {
     const sections: string[] = [];
 
@@ -385,14 +376,16 @@ export function resolveClaudeRemoteLaunchErrorDisposition(params: Readonly<{
     if (params.exitReason !== null) return 'ignore';
     if (params.runtimeTerminationStarted) return 'terminate';
 
+    if (params.error instanceof ClaudeResumeSessionUnavailableError) {
+        return params.error.providerSessionId === params.currentSessionId
+            ? 'preserve-resume-and-exit'
+            : 'surface';
+    }
     const resumeSessionId = params.sessionIdAtLaunchStart?.trim();
     const isSameResumeSession = Boolean(
         resumeSessionId
         && params.currentSessionId === params.sessionIdAtLaunchStart,
     );
-    if (isSameResumeSession && params.error instanceof ClaudeResumeSessionUnavailableError) {
-        return 'preserve-resume-and-exit';
-    }
     if (isSameResumeSession && (params.userAbort === true || params.exitCode === 1)) {
         return 'preserve-resume-and-wait';
     }
@@ -460,6 +453,12 @@ export async function claudeRemoteLauncher(
     const suppressedExplicitDiffCallIds = new Set<string>();
 
     if (shouldRenderInkUi) {
+        // Ink and React load only for an attached terminal UI, keeping them out of daemon-started runners.
+        const [{ render }, { default: React }, { RemoteModeDisplay }] = await Promise.all([
+            import('ink'),
+            import('react'),
+            import('@/backends/claude/ui/RemoteModeDisplay'),
+        ]);
         console.clear();
         const inkStdout = createNonBlockingStdout(process.stdout as any);
         inkInstance = render(React.createElement(RemoteModeDisplay, {
@@ -763,8 +762,11 @@ export async function claudeRemoteLauncher(
     const providerRuntimeActivityEvidence = createClaudeRuntimeActivityEvidence({
         providerActivityLedger: session.getProviderTaskActivityLedger() ?? undefined,
     });
-    const observeLegacyProviderActivityHook = (hook: unknown): void => {
+    const observeLegacyProviderActivityHook = (hook: SessionHookData): void => {
         if (activeRemoteRunnerKind !== 'legacy') return;
+        if (isLivePrimaryClaudeProviderHook(hook, session.sessionId)) {
+            session.client.sessionTurnLifecycle?.observeProviderTurnEvent();
+        }
         workflowActivitySource?.observeTranscriptMessage(hook, { historicalReplay: false, authenticatedHook: true });
         observeClaudeProviderTaskRuntimeActivityHook({
             hook,
@@ -917,17 +919,6 @@ export async function claudeRemoteLauncher(
         if ((message as { type?: unknown }).type === 'attachment') {
             goalWorkStateSource.observeTranscriptMessage(message);
             return;
-        }
-
-        const effectiveModelId = readClaudeSdkEffectiveModelId(message);
-        if (effectiveModelId) {
-            applyClaudeEffectiveModelUpdate({
-                client: session.client,
-                reconcileModels: session.reconcileSessionModels,
-                modelId: effectiveModelId,
-                source: 'sdk',
-                logPrefix: '[remote]',
-            });
         }
 
         if (message.type === 'system') {
@@ -1513,10 +1504,13 @@ export async function claudeRemoteLauncher(
                     // SDK resume does not replay historical Agent launches and acknowledgements.
                     // Runtime selection is now known; observe aliases before returning its first
                     // input to the dispatcher, which can then construct the SDK query and hooks.
+                    // Seed only a resumable id: a provisional, never-materialized id names no
+                    // conversation, and demanding its transcript would fail the fresh start.
                     session.adoptExplicitResumeSessionIdFromArgs();
+                    const resumeIdentity = session.getResumableSessionIdentity();
                     await seedClaudeTranscriptHistory(
-                        session.sessionId,
-                        session.transcriptPath ?? null,
+                        resumeIdentity?.sessionId ?? null,
+                        resumeIdentity?.transcriptPath ?? null,
                         activeRuntimeModeKind === 'agentSdk' && workflowActivitySource !== null,
                     );
                     return pinnedBatch;
@@ -1710,10 +1704,16 @@ export async function claudeRemoteLauncher(
 
                 const remoteDispatch = await inputConsumer.runProviderInputDispatch({
                     abortSignal: controller.signal,
-                    dispatch: async () => claudeRemoteDispatch({
-                    sessionId: session.sessionId,
+                    dispatch: async () => {
+                        const resumeIdentity = session.getResumableSessionIdentity();
+                        return claudeRemoteDispatch({
+                    // Only a resumable id may back the remote start plan: a hook-observed
+                    // id whose transcript never materialized is provisional and resolves
+                    // to null here, so the first remote message starts a fresh Claude
+                    // session instead of failing an unrequested resume.
+                    sessionId: resumeIdentity?.sessionId ?? null,
                     happySessionId: session.client.sessionId,
-                    transcriptPath: session.transcriptPath,
+                    transcriptPath: resumeIdentity?.transcriptPath ?? null,
                     path: session.path,
                     systemPromptText: session.defaultSystemPromptText,
                     hookSettingsPath: session.hookSettingsPath,
@@ -1868,6 +1868,7 @@ export async function claudeRemoteLauncher(
                     onThinkingChange: session.onThinkingChange,
                     claudeArgs: session.claudeArgs,
                     onMessage,
+                    onProviderEvent: () => session.client.sessionTurnLifecycle?.observeProviderTurnEvent(),
                     onEffectiveModel: (facts: ClaudeEffectiveModelObservation) => applyClaudeEffectiveModelUpdate({
                         client: session.client, reconcileModels: session.reconcileSessionModels,
                         ...facts, source: 'sdk', logPrefix: '[remote]',
@@ -2270,7 +2271,8 @@ export async function claudeRemoteLauncher(
                             inFlightSteerCapabilityPublisher.dispose();
                         }
                     },
-                    }),
+                    });
+                    },
                 });
                 if (remoteDispatch.status === 'cancelled') {
                     continue;
@@ -2333,6 +2335,19 @@ export async function claudeRemoteLauncher(
                     exitReason = 'exit';
                 }
                 if (errorDisposition === 'preserve-resume-and-exit') {
+                    if (hasUnverifiedProviderTermination(e)) {
+                        await surfacePrimarySessionRuntimeIssue({
+                            provider: 'claude',
+                            cause: 'session_error',
+                            error: e,
+                            session: session.client,
+                            allocateTurnWhenIdle: true,
+                        }).catch((surfaceError) => {
+                            logger.infoFile('[remote]: failed to record unverified provider termination runtime issue', {
+                                error: formatErrorForUi(surfaceError),
+                            });
+                        });
+                    }
                     session.client.sendSessionEvent({
                         type: 'message',
                         message: formatErrorForUi(e, { maxChars: 12_000 }),

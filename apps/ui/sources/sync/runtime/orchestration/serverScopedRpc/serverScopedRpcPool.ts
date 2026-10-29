@@ -7,6 +7,7 @@ import {
 
 import { createScopedCacheTokenKeyRegistry } from './scopedCacheTokenKey';
 import { createScopedResolutionSingleFlight } from './scopedResolutionSingleFlight';
+import { DEFAULT_SERVER_SCOPED_RPC_TIMEOUT_MS } from './serverScopedRpcTypes';
 import { createRpcCallError, readRpcErrorCode } from '@/sync/runtime/rpcErrors';
 import { t } from '@/text';
 import { AccountEncryptionModeResponseSchema, isPlainMachineDataKeyMarker } from '@happier-dev/protocol';
@@ -146,7 +147,7 @@ export async function resolveScopedMachineEncryptionContext(params: Readonly<{
     const machineId = normalizeId(params.machineId);
     const serverId = normalizeId(params.serverId);
     const token = String(params.token ?? '');
-    const timeoutMs = typeof params.timeoutMs === 'number' && params.timeoutMs > 0 ? params.timeoutMs : 30_000;
+    const timeoutMs = typeof params.timeoutMs === 'number' && params.timeoutMs > 0 ? params.timeoutMs : DEFAULT_SERVER_SCOPED_RPC_TIMEOUT_MS;
     const keyCacheKey = toMachineDataKeyCacheKey(serverId, machineId, token);
 
     // Coalesce the burst. `keyCacheKey` covers the target server, the machine and the

@@ -616,6 +616,8 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
         rememberLastProjectSessionSelections,
         workspaceLabelsV1,
         setWorkspaceLabelsV1,
+        setWorkspaceColor,
+        setSessionAppearance,
         workspaceFaviconsEnabled,
         workspaceMachineSubtitlesEnabled,
         collapsedGroupKeysV1,
@@ -636,7 +638,6 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
         headerFilters,
         pathname,
         sessionListSurfaceDataActive: surfaceOwnership.dataActive,
-        storageKind: props.storageKind,
     });
     const sessionListWorkingIndicatorStyle = useSetting('sessionListNarrowWorkingIndicatorStyle');
     const backgroundWorkAttentionMode = normalizeSessionListBackgroundWorkAttentionMode(useSetting('sessionListBackgroundWorkAttentionModeV1'));
@@ -1948,15 +1949,17 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
                         item={item}
                         hasMultipleMachines={hasMultipleMachines}
                         dragHandleGesture={dragHandleGesture}
-                        workspaceLabelsV1={workspaceLabelsV1}
                         workspaceFaviconsEnabled={workspaceFaviconsEnabled}
                         workspaceMachineSubtitlesEnabled={workspaceMachineSubtitlesEnabled}
                         onMoveUp={moveActionHandlers.onMoveUp}
                         onMoveDown={moveActionHandlers.onMoveDown}
                         onRenameWorkspace={handleRenameWorkspace}
                         onResetWorkspaceName={handleResetWorkspaceName}
+                        onSetWorkspaceColor={setWorkspaceColor}
                         onCreateSession={() => handleCreateSessionFromProject(item)}
-                        onAddFolder={() => handleAddFolderToProject(item)}
+                        onAddFolder={folderActionsEnabled && resolveDurableWorkspaceRefForSessionListHeader(item)
+                            ? () => handleAddFolderToProject(item)
+                            : undefined}
                         collapsed={Boolean(collapsedKeys[collapseKey])}
                         onToggleCollapse={() => handleToggleCollapse(collapseKey)}
                         headerTestId={headerTestId}
@@ -2010,6 +2013,7 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
         handleRenameWorkspace,
         handleRenameSessionFolder,
         handleResetWorkspaceName,
+        setWorkspaceColor,
         handleToggleCollapse,
         headerControlsAnchorKey,
         hasMultipleMachines,
@@ -2168,6 +2172,7 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
                 getRowNativeContextMenuOpenChangeHandler={getRowNativeContextMenuOpenChangeHandler}
                 getRowSetTagsHandler={getRowSetTagsHandler}
                 getRowTogglePinnedHandler={getRowTogglePinnedHandler}
+                onSetSessionAppearance={setSessionAppearance}
                 groupKey={groupKey}
                 item={item}
                 nativeContextMenuSessionKey={nativeContextMenuSessionKey}
@@ -2207,6 +2212,7 @@ export const SessionsListContent = React.memo(function SessionsListContent(props
         getRowNativeContextMenuOpenChangeHandler,
         getRowSetTagsHandler,
         getRowTogglePinnedHandler,
+        setSessionAppearance,
         resolveStableDropResult,
         registerTreeRowBounds,
         sessionListOrderingMode,

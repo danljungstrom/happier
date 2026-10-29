@@ -12,21 +12,15 @@ import { createCodexAcpBackend, type CodexAcpBackendOptions, type CodexAcpBacken
 import { publishCodexSessionIdMetadata } from '@/backends/codex/utils/codexSessionIdMetadata';
 import type { PermissionMode } from '@/api/types';
 import { buildCodexAcpEnvOverrides } from '@/backends/codex/acp/env';
-import {
-  sendPermissionRequestPushNotificationForActiveAccount,
-  type PermissionRequestPushSender,
-} from '@/settings/notifications/permissionRequestPush';
-import { getSessionNotificationTitle } from '@/agent/runtime/readyNotificationContext';
 import { createAgentSessionMediaPersister } from '@/session/sessionMedia/createAgentSessionMediaPersister';
 import { createSessionMediaAccessPolicy } from '@/session/sessionMedia/createSessionMediaAccessPolicy';
 import { resolveConfiguredCodexHome } from '@/backends/codex/utils/resolveConfiguredCodexHome';
-import { getProviderCliRuntimeSpec } from '@happier-dev/agents';
 
 export function createCodexAcpRuntime(params: {
   directory: string;
   processEnv?: NodeJS.ProcessEnv;
+  reasoningSummary?: 'auto' | 'none';
   session: ApiSessionClient;
-  pushSender?: PermissionRequestPushSender;
   messageBuffer: MessageBuffer;
   mcpServers: Record<string, McpServerConfig>;
   permissionHandler: AcpPermissionHandler;
@@ -74,18 +68,6 @@ export function createCodexAcpRuntime(params: {
     changeTitleInstruction: { enabled: false },
     hooks: {
       onTurnFailure: params.onTurnFailure,
-      onPermissionRequest: ({ permissionId, toolName }) => {
-        if (!params.pushSender) return;
-        sendPermissionRequestPushNotificationForActiveAccount({
-          pushSender: params.pushSender,
-          sessionId: params.session.sessionId,
-          sessionTitle: getSessionNotificationTitle(params.session.getMetadataSnapshot?.bind(params.session)) ?? params.session.sessionId,
-          agentDisplayName: getProviderCliRuntimeSpec('codex').title,
-          permissionId,
-          toolName,
-          permissionMode: params.getPermissionMode?.() ?? params.permissionMode,
-        });
-      },
     },
     // Codex ACP supports in-flight steering via the ACP backend's dedicated steer entrypoint.
     inFlightSteer: { enabled: true },
@@ -118,6 +100,7 @@ export function createCodexAcpRuntime(params: {
         mcpServers: params.mcpServers,
         permissionHandler: params.permissionHandler,
         permissionMode,
+        reasoningSummary: params.reasoningSummary,
       });
       logger.debug(`[CodexACP] Backend created (command=${created.spawn.command})`);
       return created.backend as unknown as AgentBackend;

@@ -18,6 +18,7 @@ import { EncryptionCache } from '@/sync/encryption/encryptionCache';
 import { SecretBoxEncryption, type Decryptor, type Encryptor } from '@/sync/encryption/encryptor';
 import { getSessionStatus } from '@/utils/sessions/sessionUtils';
 import { subscribeActivityLocalNotifications, type ActivityLocalNotificationEvent } from '@/activity/notifications/runtime/activityLocalNotificationBus';
+import { buildActivityLocalNotificationContent } from '@/activity/notifications/buildActivityLocalNotificationContent';
 import {
     flushActivityUpdates,
     handleUpdateContainer,
@@ -96,6 +97,54 @@ describe('socket update handling: plaintext update-session', () => {
             bindingsByConversationSessionId: {},
         }));
         storage.setState(initialStorageState, true);
+    });
+
+    it('keeps local permission notifications bound to producer occurrences across republishing and request-ID reuse', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(10_000);
+        const sessionId = 's_local_permission_occurrences';
+        storage.getState().applySessions([buildSession(sessionId)]);
+        markSessionVisible(sessionId);
+        const params = buildBaseParams({ applySessions: rows => storage.getState().applySessions(rows) });
+        const events: ActivityLocalNotificationEvent[] = [];
+        const unsubscribe = subscribeActivityLocalNotifications(event => {
+            if (event.kind === 'agent-request' && event.sessionId === sessionId) events.push(event);
+        });
+        const publish = async (requests: unknown, version: number) => {
+            await handleUpdateContainer({
+                ...params,
+                updateData: {
+                    id: `request-update-${version}`, seq: version, createdAt: version * 100,
+                    body: { t: 'update-session', id: sessionId,
+                        agentState: { version, value: JSON.stringify({ requests }) } },
+                },
+            });
+            await vi.advanceTimersByTimeAsync(100);
+        };
+        const occurrenceA = { tool: 'Bash', arguments: { command: 'git status' }, occurrenceId: 'producer-occurrence-a' };
+        const occurrenceB = { ...occurrenceA, occurrenceId: 'producer-occurrence-b' };
+        try {
+            await publish({ reused: occurrenceA }, 2);
+            await publish({ reused: occurrenceA }, 3);
+            // A newer occurrence may arrive without an intermediate empty requests snapshot.
+            await publish({ reused: occurrenceB }, 4);
+            await publish({ reused: occurrenceB, legacy: { tool: 'Read', arguments: { path: '/tmp/file' } } }, 5);
+
+            // Build after the replacement is stored: old events must retain their original
+            // identity, while a legacy request must not borrow a token from current state.
+            const session = storage.getState().sessions[sessionId];
+            const notifications = events.map(event => buildActivityLocalNotificationContent({
+                event, session, serverUrl: 'https://stack.example.test',
+            }));
+            expect(notifications.map(notification => notification.data)).toEqual([
+                { sessionId, serverUrl: 'https://stack.example.test', requestId: 'reused', kind: 'permission', occurrenceId: 'producer-occurrence-a' },
+                { sessionId, serverUrl: 'https://stack.example.test', requestId: 'reused', kind: 'permission', occurrenceId: 'producer-occurrence-b' },
+                { sessionId, serverUrl: 'https://stack.example.test', requestId: 'legacy', kind: 'permission' },
+            ]);
+        } finally {
+            unsubscribe();
+            vi.useRealTimers();
+        }
     });
 
     it.each(['agent-state', 'metadata-without-counts'] as const)('does not restore settled pending counts after delayed %s decryption', async (payload) => {

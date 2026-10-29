@@ -647,7 +647,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
       commands: {
           composerAbortConfirm: '確認中止',
           composerFocus: '聚焦輸入框',
-          composerSendImmediate: '立即傳送',
+          composerSendImmediate: '切換傳送方式（排隊 / 引導）',
+            composerSendInterrupt: '中斷並傳送',
           composerSendPending: '傳送到待處理佇列',
           commandPaletteOpen: '開啟命令面板',
           modeCycle: '切換模式',
@@ -757,6 +758,14 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     transcript: {
+
+      quote: {
+
+        action: '引用',
+
+        actionA11y: '在訊息中引用所選文字',
+
+      },
 
       selection: {
 
@@ -1891,6 +1900,15 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     appCrash: {
+        saveDiagnostics: "儲存診斷資訊",
+        diagnosticsSaveFailed: "無法儲存診斷資訊。當機詳細資料仍可使用。請重試或複製詳細資料。",
+        copyFailed: "無法複製當機詳細資料。請重試。",
+        discardFailed: "無法捨棄已儲存的當機。請重試。",
+        restartWithoutReport: "不儲存並重新啟動",
+        reportSaveFailed: "無法儲存當機詳細資料。請在重新啟動前複製錯誤詳細資料，或重試回報。",
+        savedReportNotice: "已儲存的當機顯示於下方。請在提交前檢查並編輯。提交或捨棄前，資訊會保留在此裝置上。",
+        discardSavedReport: "捨棄已儲存的當機",
+        stackTruncated: "此欄位中的堆疊已縮短。完整當機資訊仍儲存在此裝置上。",
         title: '發生錯誤',
         subtitle: 'Happier 發生了非預期的錯誤。你可以重新啟動應用程式介面，或複製詳細資訊以便支援排查。',
         detailsTitle: '錯誤詳細資訊',
@@ -3228,6 +3246,10 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
 		    settingsDesktop: {
+		        nativeTitleBarTitle: '使用 Windows 標題列',
+		        nativeTitleBarSubtitle: '顯示 Windows 標準視窗邊框和控制按鈕。',
+		        nativeTitleBarChangeFailed: '無法變更標題列。請再試一次。',
+		        nativeTitleBarPersistenceFailed: '無法載入或儲存標題列偏好設定。請再次變更此設定以重試。',
 		        title: '桌面',
 		        footer: '控制 Happier 在這台電腦上的行為。',
 		        backgroundServiceTitle: '在背景保持可連線',
@@ -3430,6 +3452,17 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
             openSettingsFailed: '無法開啟系統設定。',
         },
         pushTroubleshooting: {
+            remoteTest: {
+                title: "傳送遠端測試",
+                subtitle: "透過連線至此 Home 的機器，向此手機傳送真實的推播通知。",
+                notRegistered: "請註冊此手機的權杖，然後重試。",
+                noMachine: "請將機器連線至此 Home，以傳送遠端測試。",
+                accepted: "推播服務已接受測試。這並不確認手機已收到或顯示通知。請檢查通知。",
+                rejected: "推播服務未確認接受。再次嘗試前，請檢查通知和註冊狀態。",
+                invalidCredentials: "推播供應商拒絕了此應用程式的憑證。請檢查 APNs 或 FCM 設定。",
+                unsupported: "請更新所連線機器的 Happier CLI，以傳送遠端測試。",
+                unconfirmed: "無法確認結果。請求仍可能完成；再次嘗試前請檢查通知。",
+            },
             status: {
                 title: '狀態',
                 footer: '檢查帳戶設定、作業系統權限與伺服器註冊狀態。',
@@ -3566,7 +3599,12 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     notifications: {
+        permissionActionNeedsReview: "無法確認從通知傳送的回覆。請先檢查待處理請求，再次回覆。",
+        permissionActionReviewUnavailable: "無法開啟此回覆對應的 Home 和帳戶。請在設定中檢查連線與登入狀態，再檢查待處理請求。",
         actions: {
+            reviewPendingRequests: "檢查待處理請求",
+            questionReply: "回覆",
+            questionPlaceholder: "你的回答",
             allow: '允許',
             deny: '拒絕',
             answer: '回答',
@@ -4055,6 +4093,16 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
                     },
                 },
                 fields: {
+                    codexReasoningSummaries: {
+                        title: "推理摘要",
+                        footer: "控制 Codex 是否產生摘要，與對話中的顯示方式無關。在啟動或恢復工作階段時生效。可用性取決於模型。",
+                        generation: "產生",
+                        options: {
+                            default: "使用 Codex 設定或模型預設值。",
+                            enabled: "在模型支援時請求摘要。",
+                            disabled: "不產生推理摘要。",
+                        },
+                    },
                     codexBackendMode: {
                         title: 'Codex 路由模式',
                         subtitle: '選擇 App Server、ACP 或 MCP。',
@@ -4090,6 +4138,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
 
     settingsAppearance: {
       tabBarAppearance: {
+        sideRailTitle: "在側邊欄顯示分頁",
+        sideRailSubtitle: "關閉後即可使用 Happier 的分頁列與滑動手勢。",
         title: '標籤列',
         footer: '自訂底部標籤列。',
         showLabels: '顯示標籤列文字',
@@ -5580,6 +5630,17 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
             presetName: '預設名稱', movePresetUp: '上移預設', movePresetDown: '下移預設',
             noPresets: '沒有已儲存的預設', noPresetsMessage: '下次選擇自訂提醒時即可儲存。',
         },
+        appearance: {
+            setColor: '設定顏色',
+            customColor: '自訂顏色…',
+            customColorTitle: '自訂顏色',
+            customColorMessage: '選擇一個色調，或輸入十六進位值。',
+            invalidColor: '請使用十六進位值，例如 #3A7BD5。',
+            removeColor: '移除顏色',
+            inheritedFromProject: '來自專案',
+            customColorLabel: ({ hex }: { hex: string }) => `自訂顏色 ${hex}`,
+            colors: { blue: '藍色', green: '綠色', orange: '橙色', yellow: '黃色', red: '紅色', indigo: '靛藍', purple: '紫色' },
+        },
         workingSectionTitle: '正在工作',
         hideInactiveSessions: '隱藏非使用中工作階段',
         showInactiveSessions: '顯示非使用中工作階段',
@@ -5711,6 +5772,9 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         happyHome: 'Happier 主目錄',
         copyMetadata: '複製中繼資料',
         copyDebugInformation: '複製資訊',
+        sessionInformation: "工作階段資訊",
+        happierSessionId: "Happier 工作階段 ID",
+        providerSessionId: ({ provider }: { provider: string }) => `${provider} 工作階段 ID`,
         debugInformationCopyLabel: '資訊',
         providerSessionLogs: ({ provider }: { provider: string }) => `${provider} 工作階段日誌`,
         agentState: 'Agent 狀態',
@@ -5720,6 +5784,9 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         thinking: '思考中',
         thinkingSince: '思考開始時間',
         thinkingLevel: '思考等級',
+        peerReportFrom: ({ name }: { name: string }) => `來自${name}的報告`,
+        peerMessageFrom: ({ name }: { name: string }) => `來自${name}的訊息`,
+        peerUnnamedSender: '另一個代理',
         cliVersion: 'CLI 版本',
         cliVersionOutdated: '需要更新 CLI',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
@@ -5729,6 +5796,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         deleteSessionSubtitle: '永久刪除此工作階段',
         deleteSessionConfirm: '永久刪除工作階段？',
         deleteSessionWarning: '此操作無法復原。與此工作階段相關的所有訊息和資料將被永久刪除。',
+        stopAndDeleteSession: "停止並刪除",
+        stopAndDeleteSessionWarning: "這將停止工作階段，並永久刪除其所有訊息和資料。此操作無法復原。",
         failedToDeleteSession: '刪除工作階段失敗',
         sessionDeleted: '工作階段刪除成功',
         forkSession: '分支工作階段',
@@ -5752,6 +5821,11 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     agentInput: {
+        sendOptions: {
+            title: "傳送選項",
+            queue: "加入佇列",
+            hint: "長按選擇傳送方式",
+        },
         chipPicker: {
             selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}。已選擇。`,
         },
@@ -8008,7 +8082,7 @@ settingsSession: {
             offline: '部分機器目前離線',
             checkedAt: ({ time }: { time: string }) => `上次檢查：${time}`,
             upToDateDescription: 'Happier、其命令列工具和你的代理都已是最新版本。',
-            unknownDescription: '所有能檢查的項目都已是最新版本。其餘項目會在可連線時重新檢查。',
+            unknownDescription: "部分更新資訊無法取得或來自快取。請查看相關列以瞭解詳情。",
             offlineDescription: '所有可連線的項目都已是最新版本。離線的機器會在重新上線後檢查。',
         },
         settingsSubtitle: {
@@ -8054,6 +8128,9 @@ settingsSession: {
             appCheckFailed: '無法檢查是否有新版本。',
             appDownloadFailed: '下載未完成。',
             appInstallFailed: '無法安裝更新。',
+            cachedRelease: "快取的發行資訊；此處不會重新整理",
+            cachedReleaseChannel: ({ channel }: { channel: string }) => `快取的 ${channel} 發行資訊；此處不會重新整理`,
+            manualUpdateInterruptsSessions: "請在此電腦上更新。服務可能停止，執行中的工作階段可能結束。",
             latestUnknown: '無法檢查是否有新版本',
             rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} 未能在這台機器上啟動，因此仍維持 ${kept}。`,
             installedByYou: '由你安裝',
@@ -8300,6 +8377,7 @@ settingsSession: {
         failedToConnectTerminal: '連線終端失敗',
         cameraPermissionsRequiredToConnectTerminal: '連線終端需要相機權限',
         failedToLinkDevice: '連結裝置失敗',
+        deviceLinkRequestNotFound: "此中繼上沒有待處理的裝置連結請求。請確認兩台裝置使用相同的中繼，然後產生新的 QR 碼。",
         cameraPermissionsRequiredToScanQr: '掃描 QR Code 需要相機權限',
         qrScannerUnavailable: '無法開啟 QR 掃描器。請再試一次或手動輸入 URL。'
     },

@@ -5,7 +5,7 @@ import type { TerminalControlPort, TerminalSpecialKey } from '@/integrations/ter
 import { normalizeClaudeAskUserQuestionInputForPublication } from '../../utils/normalizeClaudeAskUserQuestionInput';
 import { buildNativeAskUserQuestionAnswersForClaude } from '../../utils/askUserQuestionAnswersForClaude';
 import { captureScreenState, doesClaudeOwnedTextMatchCapture, hasUnsupportedClaudeNativeTextControls, sendResultToFailure } from './controlRuntime';
-import { matchesClaudeNativeQuestionScreen, type ClaudeNativeQuestionPresentation } from './nativeQuestionScreen';
+import { matchesClaudeNativeQuestionScreen, matchesClaudeNativeQuestionText, type ClaudeNativeQuestionPresentation } from './nativeQuestionScreen';
 import { DEFAULT_CLAUDE_TUI_CONTROL_TIMINGS } from './types';
 
 export { matchesClaudeNativeQuestionScreen, parseClaudeNativeQuestionScreen, type ClaudeNativeQuestionPresentation } from './nativeQuestionScreen';
@@ -99,9 +99,11 @@ export async function answerClaudeNativeQuestion(params: Readonly<{
     screen.kind === 'review' && screen.reviewAnswers.length === questions.length
     && screen.reviewAnswers.every((answer, index) => ownDrafts.has(index)
       ? doesClaudeOwnedTextMatchCapture(desired[index]!.rendered, answer.answer)
-      : answer.answer === desired[index]!.rendered)
+      : desired[index]!.freeform.length === 0
+        ? matchesClaudeNativeQuestionText(answer.answer, desired[index]!.rendered)
+        : answer.answer === desired[index]!.rendered)
   );
-  const questionIndex = () => questions.findIndex((question) => question.question?.trim() === read().question?.trim());
+  const questionIndex = () => questions.findIndex((question) => matchesClaudeNativeQuestionText(read().question ?? '', question.question ?? ''));
   const conflict = (index: number): boolean => {
     const screen = read();
     const target = desired[index]!;

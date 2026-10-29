@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { decodeBase64, encodeBase64 } from '../crypto/base64.js';
+import { lazySchema } from '../lazySchema.js';
 
 // Shared with 0.3: the existing key carrier distinguishes plain Machines from
 // released legacy rows whose absent key means account-key encryption.
-const MachinePlainStoredContentEnvelopeSchema = z.object({
+const MachinePlainStoredContentEnvelopeSchema = lazySchema(() => z.object({
   t: z.literal('plain'),
   v: z.json(),
-}).strict();
+}).strict());
 
 function parsePlainEnvelope(value: string | Uint8Array): z.infer<typeof MachinePlainStoredContentEnvelopeSchema> | null {
   try {

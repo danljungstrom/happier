@@ -63,7 +63,7 @@ import {
 } from '@/agent/acp/runtime/sessionModelsState';
 import {
   isAcpModeConfigOptionLike,
-  isAcpModelConfigOptionLike,
+  resolveAcpModelConfigOption,
 } from '@/agent/acp/configOptionChoiceNormalization';
 import { readNonBlankSessionControlIdentifier } from '@/agent/runtime/sessionControlIdentifiers';
 import { readNonBlankOpaqueIdentifier } from '@/utils/opaqueIdentifiers';
@@ -189,6 +189,9 @@ function normalizeAcpPromptFailureRuntimeIssueError(params: Readonly<{
   error: unknown;
   turnInFlight: boolean;
 }>): unknown {
+  if (params.error instanceof AcpPromptSubmissionPhaseError) {
+    return normalizeAcpPromptFailureRuntimeIssueError({ ...params, error: params.error.cause });
+  }
   if (params.provider !== 'pi') return params.error;
   const brokerReadinessCarrier = findPiRuntimeIssueCarrier(params.error, 'piBrokerReadinessFailure');
   if (brokerReadinessCarrier) return brokerReadinessCarrier;
@@ -586,6 +589,7 @@ export function createAcpRuntime(params: {
   let backend: AcpRuntimeBackend | null = null;
   let backendPromise: Promise<AcpRuntimeBackend> | null = null;
   let messageForwarder: ReturnType<typeof createAcpAgentMessageForwarder> | null = null;
+  let stopObservingProviderTurnEvents: (() => void) | null = null;
   let sessionId: string | null = null;
   let runtimeMetadataPublicationGeneration = 0;
   let pendingProviderSessionInfo: Readonly<{
@@ -1524,7 +1528,12 @@ export function createAcpRuntime(params: {
 
   const attachMessageHandler = (b: AcpRuntimeBackend) => {
     messageForwarder?.dispose();
+    stopObservingProviderTurnEvents?.();
     const handlerGeneration = runtimeMetadataPublicationGeneration;
+    stopObservingProviderTurnEvents = b.onProviderTurnEvent?.(() => {
+      if (handlerGeneration !== runtimeMetadataPublicationGeneration) return;
+      params.session.sessionTurnLifecycle?.observeProviderTurnEvent();
+    }) ?? null;
     const forwarder = createAcpAgentMessageForwarder({
       sendAcp: (provider, body, opts) => params.session.sendAgentMessage(provider, body, opts),
       provider: params.provider,
@@ -1942,12 +1951,12 @@ export function createAcpRuntime(params: {
               && Array.isArray(asRecord(msg.payload)?.configOptions)) {
               const payloadRecord = asRecord(msg.payload);
               const configOptions = normalizeConfigOptionsArray(payloadRecord?.configOptions);
+              const modelOpt = resolveAcpModelConfigOption(configOptions, resolveAcpModelConfigOptionId());
               const derivedModels = (() => {
                 if (params.deriveSessionModelsFromConfigOptions) {
                   return params.deriveSessionModelsFromConfigOptions(configOptions);
                 }
 
-                const modelOpt = configOptions.find(isAcpModelConfigOptionLike);
                 if (!modelOpt || !Array.isArray(modelOpt.options)) return null;
 
                 const currentValue = modelOpt.currentValue;
@@ -2006,7 +2015,7 @@ export function createAcpRuntime(params: {
                   const modelSnapshot = derivedModels ?? (
                     !params.deriveSessionModelsFromConfigOptions
                       && Array.isArray(payloadRecord?.configOptions)
-                      && !configOptions.some(isAcpModelConfigOptionLike)
+                      && !modelOpt
                       && previousModels?.provider === params.provider
                       ? previousModels
                       : null
@@ -2017,7 +2026,7 @@ export function createAcpRuntime(params: {
                       : applyObservedAcpModelOptions(
                         modelSnapshot.availableModels,
                         modelSnapshot.currentModelId,
-                        collectAcpModelScopedConfigOptions(configOptions),
+                        collectAcpModelScopedConfigOptions(configOptions.filter((option) => option !== modelOpt)),
                         previousModels?.provider === params.provider ? previousModels.availableModels : [],
                       );
                     next.sessionModelsV1 = {
@@ -2230,6 +2239,18 @@ export function createAcpRuntime(params: {
     }
   };
 
+  function resolveAcpModelConfigOptionId(): string | null {
+    try {
+      return getAgentModelConfig(params.provider as AgentId).acpModelConfigOptionId ?? null;
+    } catch (error) {
+      logger.debug(
+        `[${params.provider}] Failed to resolve provider model config option id; config-option fallback is unavailable`,
+        error
+      );
+      return null;
+    }
+  }
+
   const applySessionModelControl = async (modelId: string): Promise<void> => {
     const normalizedModelId = readNonBlankSessionControlIdentifier(modelId) ?? '';
     if (!normalizedModelId) return;
@@ -2237,18 +2258,7 @@ export function createAcpRuntime(params: {
       throw new Error(`${params.provider} ACP session was not started`);
     }
     const activeSessionId = sessionId;
-
-    const modelConfigOptionId = (() => {
-      try {
-        return getAgentModelConfig(params.provider as AgentId).acpModelConfigOptionId ?? null;
-      } catch (error) {
-        logger.debug(
-          `[${params.provider}] Failed to resolve provider model config option id; config-option fallback is unavailable`,
-          error
-        );
-        return null;
-      }
-    })();
+    const modelConfigOptionId = resolveAcpModelConfigOptionId();
     const modelSetMethod = (() => {
       try {
         return getAgentModelConfig(params.provider as AgentId).acpModelSetMethod ?? 'set_model';
@@ -2498,6 +2508,8 @@ export function createAcpRuntime(params: {
         params.session.keepAlive(false, 'remote');
         messageForwarder?.dispose();
         messageForwarder = null;
+        stopObservingProviderTurnEvents?.();
+        stopObservingProviderTurnEvents = null;
 
         try {
           const backendCreation = backendPromise;

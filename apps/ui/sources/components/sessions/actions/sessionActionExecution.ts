@@ -10,12 +10,14 @@ import {
     sessionStopWithServerScope,
     sessionUnarchiveWithServerScope,
 } from '@/sync/ops';
-import { sessionSetAttentionStandingWithServerScope } from '@/sync/ops/sessionOrganization';
+import { sessionSetAttentionStandingWithServerScope, setSessionPin } from '@/sync/ops/sessionOrganization';
+import { resolveSessionOrganizationMutationScope } from '@/sync/domains/session/organization/mutationScope';
 import {
     archiveSessionWithPendingState,
     isSessionActiveArchiveResult,
     isSessionArchivePending,
     stopSessionAndMaybeArchive,
+    stopSessionAndRunAction,
 } from '@/components/sessions/sessionStopArchiveFlow';
 
 import {
@@ -44,6 +46,74 @@ import type {
 } from './sessionActionTypes';
 import { resolveSessionArchiveActionPolicy } from './sessionActionMetadata';
 import { resolveSessionArchiveServerId } from '@/sync/domains/session/listing/sessionArchiveState';
+import { resolveSessionListCacheServerId } from '@/sync/domains/session/listing/sessionListPresentation';
+import { areServerProfileIdentifiersEquivalent } from '@/sync/domains/server/serverProfiles';
+import { getActiveServerSnapshot } from '@/sync/domains/server/serverRuntime';
+import { getSessionStatus } from '@/utils/sessions/sessionUtils';
+import { nowServerMs } from '@/sync/runtime/time';
+import { createSessionActionTarget } from './sessionActionContext';
+
+function readCurrentSessionActionTarget(target: SessionActionTarget): SessionActionTarget | null {
+    const state = storage.getState();
+    const serverId = resolveSessionArchiveServerId(target.serverId);
+    const localSession = areServerProfileIdentifiersEquivalent(serverId, getActiveServerSnapshot().serverId)
+        ? state.sessionListRenderables[target.sessionId] ?? state.sessions[target.sessionId]
+        : undefined;
+    const cacheServerId = resolveSessionListCacheServerId(state.sessionListViewDataByServerId, serverId);
+    const cachedRow = cacheServerId
+        ? state.sessionListViewDataByServerId[cacheServerId]?.find((row) => row.type === 'session' && row.session.id === target.sessionId)
+        : undefined;
+    const session = localSession ?? (cachedRow?.type === 'session' ? cachedRow.session : undefined);
+    if (!session) return null;
+
+    // The target captures the owning Account; another Home's active profile must not replace it.
+    return createSessionActionTarget({
+        session,
+        serverId,
+        currentUserId: target.isOwnedByCurrentUser ? target.session.owner : null,
+        isConnected: getSessionStatus(session, nowServerMs()).isConnected,
+    });
+}
+
+function canDeleteCurrentSession(target: SessionActionTarget): boolean {
+    return target.canDelete && readCurrentSessionActionTarget(target)?.canDelete === true;
+}
+
+async function executeDeleteAction(target: SessionActionTarget, context?: SessionActionExecutionContext): Promise<void | false> {
+    if (!target.canDelete && !target.canStopAndDelete) throw new HappyError(t('sessionInfo.failedToDeleteSession'), false);
+    const confirmed = await Modal.confirm(
+        t('sessionInfo.deleteSession'),
+        t(target.canStopAndDelete ? 'sessionInfo.stopAndDeleteSessionWarning' : 'sessionInfo.deleteSessionWarning'),
+        { cancelText: t('common.cancel'), confirmText: t(target.canStopAndDelete ? 'sessionInfo.stopAndDeleteSession' : 'sessionInfo.deleteSession'), destructive: true },
+    );
+    if (!confirmed) return false;
+    const deleteSession = resolveDeleteSession(context);
+    if (target.canStopAndDelete) {
+        // Use the same stop strategy and completion retry as Archive. In 0.2 the DELETE
+        // endpoint does not guard activity, so current scoped lifecycle evidence must do so.
+        await stopSessionAndRunAction({
+            stopSession: async () => {
+                const current = readCurrentSessionActionTarget(target);
+                if (!current?.isOwnedByCurrentUser) throw new HappyError(t('sessionInfo.failedToDeleteSession'), false);
+                if (current.canDelete) return { success: true };
+                return await resolveStopSession(context)(target.sessionId, { serverId: target.serverId });
+            },
+            stopErrorMessage: t('sessionInfo.failedToStopSession'),
+            endAction: {
+                errorMessage: t('sessionInfo.failedToDeleteSession'),
+                run: async (options) => {
+                    const current = readCurrentSessionActionTarget(target);
+                    if (!current?.isOwnedByCurrentUser) throw new HappyError(t('sessionInfo.failedToDeleteSession'), false);
+                    if (!current.canDelete) return { success: false, code: 'session_active' };
+                    return await deleteSession(target.sessionId, { serverId: target.serverId, ...options });
+                },
+            },
+        });
+        return;
+    }
+    if (!canDeleteCurrentSession(target)) throw new HappyError(t('sessionInfo.failedToDeleteSession'), false);
+    throwIfFailed(await deleteSession(target.sessionId, { serverId: target.serverId }), t('sessionInfo.failedToDeleteSession'));
+}
 
 function resolveStopArchiveFlow(context: SessionActionExecutionContext | undefined) {
     return context?.operations?.stopArchiveFlow ?? stopSessionAndMaybeArchive;
@@ -78,7 +148,11 @@ function resolveSetManualReadState(context: SessionActionExecutionContext | unde
 }
 
 function resolveSetPinned(context: SessionActionExecutionContext | undefined) {
-    return context?.operations?.setPinned;
+    return context?.operations?.setPinned ?? (async (sessionId: string, pinned: boolean, opts?: Readonly<{ serverId?: string | null }>) => {
+        const resolved = await resolveSessionOrganizationMutationScope(opts?.serverId);
+        if (!resolved.ok) throw new HappyError(t('errors.unknownError'), false);
+        await setSessionPin({ ...resolved.scope, sessionId, pinned });
+    });
 }
 
 function resolveSetAttentionStanding(context: SessionActionExecutionContext | undefined) {
@@ -228,15 +302,10 @@ export async function executeSessionAction(params: Readonly<{
             );
             return;
         case SESSION_ACTION_DELETE_ID:
-            throwIfFailed(
-                await resolveDeleteSession(params.context)(params.target.sessionId, { serverId: params.target.serverId }),
-                t('sessionInfo.failedToDeleteSession'),
-            );
-            return;
+            return await executeDeleteAction(params.target, params.context);
         case SESSION_ACTION_PIN_ID:
         case SESSION_ACTION_UNPIN_ID: {
             const setPinned = resolveSetPinned(params.context);
-            if (!setPinned) throwUnsupportedSingleTargetAction();
             throwIfFailed(
                 await setPinned(params.target.sessionId, params.actionId === SESSION_ACTION_PIN_ID, { serverId: params.target.serverId }),
                 t('errors.unknownError'),

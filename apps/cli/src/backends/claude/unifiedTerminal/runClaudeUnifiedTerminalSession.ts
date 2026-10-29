@@ -29,6 +29,7 @@ import {
 } from './createClaudeUnifiedHookLifecycleBridge';
 import { createReplayableHookSubscription } from './createReplayableHookSubscription';
 import { createClaudeUnifiedTranscriptBridge } from './createClaudeUnifiedTranscriptBridge';
+import type { ClaudeEffectiveModelObservation } from '../sessionModels/effectiveModelUpdate';
 import type { ClaudeWorkflowActivityObservationContext } from '../workflows/claudeWorkflowActivitySource';
 import { isClaudeMainChainCompactBoundary } from '../localControl/readClaudeTranscriptTurnSignal';
 import type { ClaudeRemoteSubagentFileCollector } from '../remote/sidechains/claudeRemoteSubagentFileCollector';
@@ -61,6 +62,8 @@ import {
   type ClaudeUnifiedInFlightSteerWiring,
 } from './createClaudeUnifiedInFlightSteerEvaluator';
 import { createClaudeOwnComposerTextLog, type ClaudeOwnComposerTextLog } from './ownComposerTextLog';
+import { isReplaySdkMessage } from '../remote/runtimeActivityEvidence';
+import { isClaudeSidechainRuntimeEvidence } from '../utils/sessionHookAttribution';
 import { createClaudeUnifiedAcceptedPromptTranscriptDiscovery } from './acceptedPromptTranscriptDiscovery';
 import { retireClaudeEndpointArtifactsForTerminalAttachment } from '../endpointRecovery/claudeEndpointArtifacts';
 import { doesClaudeUnifiedPromptBatchMatchAcceptedTranscript } from './acceptedPromptDeliveryIdentity';
@@ -306,6 +309,9 @@ export type ClaudeUnifiedTerminalSessionOptions<Mode extends EnhancedMode = Enha
   onTerminalScreenObserved?: ((observation: ClaudeUnifiedTerminalScreenObservation) => void) | undefined;
   onRuntimeAuthFailureEvent?: ((error: unknown) => void | Promise<void>) | undefined;
   onProviderPromptStarted?: (() => void | Promise<void>) | undefined;
+  /** Live provider ingress, independent of visible transcript delivery. */
+  onProviderEvent?: (() => void) | undefined;
+  readProviderSessionId?: (() => string | null) | undefined;
   /** Fires only when this runner is about to create a new provider host with spawn argv. */
   onProviderLaunchStarting?: (() => void | Promise<void>) | undefined;
   onProviderSessionStarted?: (() => void) | undefined;
@@ -324,6 +330,7 @@ export type ClaudeUnifiedTerminalSessionOptions<Mode extends EnhancedMode = Enha
   ) => void) | undefined;
   providerActivityLedger?: ReturnType<typeof createClaudeProviderActivityLedger> | undefined;
   onMessage?: ((message: RawJSONLines) => void | Promise<void>) | undefined;
+  onEffectiveModel?: ((facts: ClaudeEffectiveModelObservation) => void) | undefined;
   onHistoricalMessage?: ((message: RawJSONLines) => void | Promise<void>) | undefined;
   /**
    * Raw transcript channel (plan H7): every parsed JSONL value BEFORE the scanner's
@@ -2198,7 +2205,7 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
         onPromptDeliveryRetired: (batch) => {
           acceptedPromptTranscriptDiscovery.forgetRetiredPromptByBatch(batch);
         },
-        onPromptAccepted: (batch, acceptance) => {
+        onPromptAccepted: (batch) => {
           acceptedPromptTranscriptDiscovery.consumeAcceptedPromptByBatch({
             message: batch.message,
             maxUserMessageSeq: batch.maxUserMessageSeq ?? null,
@@ -2208,11 +2215,6 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
             message: batch.message,
             maxUserMessageSeq: batch.maxUserMessageSeq ?? null,
             userMessageLocalIds: batch.userMessageLocalIds ?? [],
-            ...(acceptance.acceptedAs === 'new_turn'
-              && typeof batch.mode?.model === 'string'
-              && batch.mode.model.trim()
-              ? { appliedModelId: batch.mode.model.trim() }
-              : {}),
           });
           // Exact provider acceptance settles Pending custody even when the hook bridge is
           // unusable. Fail the runtime only after settlement, including evidence received
@@ -2470,6 +2472,8 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
             },
             onTrustedHookActivation: observeTrustedHookActivation,
             onTrustedProviderProgress: observeTrustedProviderProgress,
+            onProviderEvent: opts.onProviderEvent,
+            readProviderSessionId: opts.readProviderSessionId,
             onMainSessionScreenMayHaveChanged: observePossibleDialogScreenChange,
             onPromptTurnTerminal: async (event) => {
               await observeMetadataApplySafeBoundary();
@@ -2539,12 +2543,13 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
         }
         await handler?.(message);
       };
-      const transcriptBridge = opts.runtimeActivityAdapter || opts.onMessage || opts.onHistoricalMessage || opts.onSessionFound || lifecycleBridge
+      const transcriptBridge = opts.runtimeActivityAdapter || opts.onMessage || opts.onEffectiveModel || opts.onHistoricalMessage || opts.onSessionFound || lifecycleBridge
         ? createClaudeUnifiedTranscriptBridge({
             sessionId: opts.sessionId ?? null,
             transcriptPath: opts.transcriptPath,
             workingDirectory: opts.path,
             claudeConfigDir: resolveClaudeConfigDirOverride(process.env),
+            onEffectiveModel: opts.onEffectiveModel,
             onMessage: opts.onMessage
               ? (message) => forwardVisibleTranscriptMessage(message, opts.onMessage)
               : undefined,
@@ -2561,6 +2566,7 @@ export async function runClaudeUnifiedTerminalSession<Mode extends EnhancedMode 
               lifecycleBridge?.observeTranscript(message);
             },
             onLiveProviderTaskJsonlValue: ({ sessionId, value }) => {
+              if (!isReplaySdkMessage(value) && !isClaudeSidechainRuntimeEvidence(value)) opts.onProviderEvent?.();
               lifecycleBridge?.observeLiveProviderActivityRow(value, sessionId);
             },
             onLiveProviderTaskObservationLost: ({ reason }) => {

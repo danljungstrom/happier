@@ -5,11 +5,6 @@ import type { ApiSessionClient } from '@/api/session/sessionClient';
 import type { PermissionMode } from '@/api/types';
 import type { MessageBuffer } from '@/ui/ink/messageBuffer';
 import { logger } from '@/ui/logger';
-import {
-  sendPermissionRequestPushNotificationForActiveAccount,
-  type PermissionRequestPushSender,
-} from '@/settings/notifications/permissionRequestPush';
-import { getSessionNotificationTitle } from '@/agent/runtime/readyNotificationContext';
 import type { SessionProviderInputConsumer } from '@/agent/runtime/sessionInput/types';
 
 import { createConfiguredAcpBackend } from './createConfiguredAcpBackend';
@@ -20,7 +15,6 @@ type CreateConfiguredAcpRuntimeParams = Readonly<{
   loggerLabel: string;
   directory: string;
   session: ApiSessionClient;
-  pushSender?: PermissionRequestPushSender;
   messageBuffer: MessageBuffer;
   mcpServers: Record<string, McpServerConfig>;
   permissionHandler: AcpPermissionHandler;
@@ -36,22 +30,6 @@ type CreateConfiguredAcpRuntimeParams = Readonly<{
 
 export function createConfiguredAcpRuntime(params: CreateConfiguredAcpRuntimeParams) {
   let activeBackend: AcpBackend | null = null;
-  const sendPermissionPush = (evt: { permissionId: string; toolName: string }): void => {
-    if (!params.pushSender) return;
-    try {
-      sendPermissionRequestPushNotificationForActiveAccount({
-        pushSender: params.pushSender,
-        sessionId: params.session.sessionId,
-        sessionTitle: getSessionNotificationTitle(params.session.getMetadataSnapshot?.bind(params.session)) ?? params.session.sessionId,
-        agentDisplayName: params.backend.title,
-        permissionId: evt.permissionId,
-        toolName: evt.toolName,
-        permissionMode: params.getPermissionMode?.(),
-      });
-    } catch {
-      // best-effort
-    }
-  };
 
   return createAcpRuntime({
     provider: `acp:${params.backend.backendId}`,
@@ -79,11 +57,6 @@ export function createConfiguredAcpRuntime(params: CreateConfiguredAcpRuntimePar
           reason: 'vendor-resume-unsupported',
         },
     memoryRecallGuidance: params.memoryRecallGuidance,
-    hooks: {
-      onPermissionRequest: (evt) => {
-        sendPermissionPush(evt);
-      },
-    },
     pendingQueue: {
       drainAfterStartOrLoad: true,
       maxPopPerWake: params.pendingQueueDrainMaxPopPerWake,

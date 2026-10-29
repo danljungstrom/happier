@@ -676,7 +676,8 @@ export const pt: TranslationStructure = {
         commands: {
             composerAbortConfirm: 'Confirmar interrupção',
             composerFocus: 'Focar compositor',
-            composerSendImmediate: 'Enviar imediatamente',
+            composerSendImmediate: 'Envio alternativo (fila / orientar)',
+            composerSendInterrupt: 'Interromper e enviar',
             composerSendPending: 'Enviar para a fila pendente',
             commandPaletteOpen: 'Abrir paleta de comandos',
             modeCycle: 'Alternar modo',
@@ -712,6 +713,14 @@ export const pt: TranslationStructure = {
   },
 
   transcript: {
+
+    quote: {
+
+      action: 'Citar',
+
+      actionA11y: 'Citar o texto selecionado na sua mensagem',
+
+    },
 
     selection: {
 
@@ -1210,6 +1219,15 @@ export const pt: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Salvar diagnósticos",
+      diagnosticsSaveFailed: "Não foi possível salvar os diagnósticos. Os detalhes do erro continuam disponíveis. Tente novamente ou copie-os.",
+      copyFailed: "Não foi possível copiar os detalhes da falha. Tente novamente.",
+      discardFailed: "Não foi possível descartar a falha guardada. Tente novamente.",
+      restartWithoutReport: "Reiniciar sem guardar",
+      reportSaveFailed: "Não foi possível guardar os detalhes da falha. Copie-os antes de reiniciar ou tente reportar novamente.",
+      savedReportNotice: "A falha guardada aparece abaixo. Reveja e edite antes de enviar. Permanece neste dispositivo até ser enviada ou descartada.",
+      discardSavedReport: "Descartar falha guardada",
+      stackTruncated: "Pilha abreviada para este campo. A falha completa continua guardada neste dispositivo.",
     title: "Algo correu mal",
     subtitle:
       "O Happier encontrou um erro inesperado. Pode reiniciar a interface da app ou copiar os detalhes para suporte.",
@@ -3652,6 +3670,10 @@ export const pt: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Usar a barra de título do Windows',
+    nativeTitleBarSubtitle: 'Mostrar a moldura e os controles de janela padrão do Windows.',
+    nativeTitleBarChangeFailed: 'Não foi possível alterar a barra de título. Tente novamente.',
+    nativeTitleBarPersistenceFailed: 'Não foi possível carregar ou salvar a preferência da barra de título. Altere-a novamente para tentar outra vez.',
     title: 'Área de trabalho',
     footer: 'Controla como o Happier se comporta neste computador.',
     backgroundServiceTitle: 'Continuar acessível em segundo plano',
@@ -3855,6 +3877,17 @@ export const pt: TranslationStructure = {
         openSettingsFailed: 'Não foi possível abrir as definições do sistema.',
     },
     pushTroubleshooting: {
+            remoteTest: {
+                title: "Enviar teste remoto",
+                subtitle: "Envie uma notificação push real para este telefone através de uma máquina conectada a este Home.",
+                notRegistered: "Registre o token deste telefone e tente novamente.",
+                noMachine: "Conecte uma máquina a este Home para enviar um teste remoto.",
+                accepted: "O serviço push aceitou o teste. Isso não confirma que o telefone o recebeu ou exibiu. Confira suas notificações.",
+                rejected: "O serviço push não confirmou a aceitação. Confira suas notificações e o registro antes de tentar novamente.",
+                invalidCredentials: "O provedor push rejeitou as credenciais deste app. Confira a configuração de APNs ou FCM.",
+                unsupported: "Atualize a CLI do Happier da máquina conectada para enviar testes remotos.",
+                unconfirmed: "Não foi possível confirmar o resultado. A solicitação ainda pode ser concluída; confira suas notificações antes de tentar novamente.",
+            },
       status: {
         title: "Estado",
         footer: "Verifica a configuração da conta, a permissão do sistema e o estado de registro no servidor.",
@@ -3997,7 +4030,12 @@ export const pt: TranslationStructure = {
   },
 
     notifications: {
+        permissionActionNeedsReview: "Não foi possível confirmar a resposta enviada pela notificação. Revise as solicitações pendentes antes de responder novamente.",
+        permissionActionReviewUnavailable: "Não foi possível abrir o Home e a conta desta resposta. Verifique a conexão e o login nas Configurações e, depois, as solicitações pendentes.",
       actions: {
+            reviewPendingRequests: "Revisar solicitações pendentes",
+            questionReply: "Responder",
+            questionPlaceholder: "Sua resposta",
         allow: 'Permitir',
         deny: 'Negar',
         answer: 'Responder',
@@ -4519,6 +4557,16 @@ export const pt: TranslationStructure = {
             },
           },
           fields: {
+            codexReasoningSummaries: {
+                title: "Resumos do raciocínio",
+                footer: "Controla se o Codex gera resumos, independentemente da exibição na conversa. Aplica-se ao iniciar ou retomar uma sessão. A disponibilidade depende do modelo.",
+                generation: "Geração",
+                options: {
+                    default: "Use a configuração do Codex ou o padrão do modelo.",
+                    enabled: "Solicite resumos quando o modelo oferecer suporte.",
+                    disabled: "Não gere resumos do raciocínio.",
+                },
+            },
             codexBackendMode: {
               title: "Modo de roteamento do Codex",
               subtitle: "Selecione App Server, ACP ou MCP.",
@@ -4554,6 +4602,8 @@ export const pt: TranslationStructure = {
 
   settingsAppearance: {
     tabBarAppearance: {
+      sideRailTitle: "Abas na barra lateral",
+      sideRailSubtitle: "Desative para usar a barra de abas do Happier e seus gestos de deslizar.",
       title: 'Barra de abas',
       footer: 'Personalize a barra de abas inferior.',
       showLabels: 'Mostrar rótulos das abas',
@@ -6680,6 +6730,17 @@ export const pt: TranslationStructure = {
       presetName: 'Nome da predefinição', movePresetUp: 'Mover para cima', movePresetDown: 'Mover para baixo',
       noPresets: 'Sem predefinições guardadas', noPresetsMessage: 'Guarda uma ao escolheres um lembrete personalizado.',
     },
+    appearance: {
+      setColor: 'Definir cor',
+      customColor: 'Cor personalizada…',
+      customColorTitle: 'Cor personalizada',
+      customColorMessage: 'Escolha um tom ou introduza um valor hexadecimal.',
+      invalidColor: 'Use um valor hexadecimal como #3A7BD5.',
+      removeColor: 'Remover cor',
+      inheritedFromProject: 'Do projeto',
+      customColorLabel: ({ hex }: { hex: string }) => `Cor personalizada ${hex}`,
+      colors: { blue: 'Azul', green: 'Verde', orange: 'Laranja', yellow: 'Amarelo', red: 'Vermelho', indigo: 'Índigo', purple: 'Roxo' },
+    },
     workingSectionTitle: 'Trabalhando',
     hideInactiveSessions: 'Ocultar sessões inativas',
     showInactiveSessions: 'Mostrar sessões inativas',
@@ -6862,6 +6923,9 @@ export const pt: TranslationStructure = {
     tmuxFallback: "Fallback do tmux",
     copyMetadata: "Copiar metadados",
     copyDebugInformation: "Copiar informações",
+    sessionInformation: "Informações da sessão",
+    happierSessionId: "ID da sessão Happier",
+    providerSessionId: ({ provider }: { provider: string }) => `ID da sessão ${provider}`,
     debugInformationCopyLabel: "Informações",
     providerSessionLogs: ({ provider }: { provider: string }) => `Logs da sessão ${provider}`,
     agentState: "Estado do agente",
@@ -6874,6 +6938,9 @@ export const pt: TranslationStructure = {
     thinking: "Pensando",
     thinkingSince: "Pensando desde",
     thinkingLevel: "Nível de pensamento",
+    peerReportFrom: ({ name }: { name: string }) => `Relatório de ${name}`,
+    peerMessageFrom: ({ name }: { name: string }) => `Mensagem de ${name}`,
+    peerUnnamedSender: "outro agente",
     cliVersion: "Versão do CLI",
     cliVersionOutdated: "Atualização do CLI necessária",
     cliVersionOutdatedMessage: ({
@@ -6891,6 +6958,8 @@ export const pt: TranslationStructure = {
     deleteSessionConfirm: "Excluir sessão permanentemente?",
     deleteSessionWarning:
       "Esta ação não pode ser desfeita. Todas as mensagens e dados associados a esta sessão serão excluídos permanentemente.",
+    stopAndDeleteSession: "Parar e excluir",
+    stopAndDeleteSessionWarning: "Isso interromperá a sessão e excluirá permanentemente todas as suas mensagens e dados. Esta ação não pode ser desfeita.",
     failedToDeleteSession: "Falha ao excluir sessão",
     sessionDeleted: "Sessão excluída com sucesso",
     manageSharing: "Gerenciar compartilhamento",
@@ -6951,6 +7020,11 @@ export const pt: TranslationStructure = {
   },
 
   agentInput: {
+      sendOptions: {
+          title: "Opções de envio",
+          queue: "Enfileirar",
+          hint: "Mantenha pressionado para escolher como enviar",
+      },
       chipPicker: {
           selectedOptionAccessibilityLabel: ({ option }: { option: string }) => `${option}. Selecionado.`,
       },
@@ -10060,7 +10134,7 @@ settingsSession: {
       offline: "Algumas máquinas estão offline",
       checkedAt: ({ time }: { time: string }) => `Última verificação: ${time}`,
       upToDateDescription: "O Happier, a linha de comando dele e seus agentes estão atualizados.",
-      unknownDescription: "Tudo o que pôde ser verificado está atualizado. O restante será verificado novamente quando estiver acessível.",
+      unknownDescription: "Algumas informações de atualização estão indisponíveis ou em cache. Veja as linhas afetadas para mais detalhes.",
       offlineDescription: "Tudo o que está acessível está atualizado. As máquinas offline serão verificadas quando voltarem.",
     },
     settingsSubtitle: {
@@ -10106,6 +10180,9 @@ settingsSession: {
       appCheckFailed: "Não foi possível verificar se há uma versão mais recente.",
       appDownloadFailed: "O download não terminou.",
       appInstallFailed: "Não foi possível instalar a atualização.",
+      cachedRelease: "Informações de versão em cache; não são atualizadas aqui",
+      cachedReleaseChannel: ({ channel }: { channel: string }) => `Informações de versão ${channel} em cache; não são atualizadas aqui`,
+      manualUpdateInterruptsSessions: "Atualize nesta máquina. Os serviços podem parar e as sessões em execução podem terminar.",
       latestUnknown: "Não foi possível verificar se há uma versão mais recente",
       rolledBack: ({ kept, target }: { kept: string; target: string }) => `${target} não iniciou nesta máquina, então ela continua na ${kept}.`,
       installedByYou: "Instalado por você",
@@ -10367,6 +10444,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Permissões de câmera são necessárias para conectar terminal",
     failedToLinkDevice: "Falha ao vincular dispositivo",
+    deviceLinkRequestNotFound: "Não foi encontrado nenhum pedido de vinculação pendente neste relay. Verifique se ambos os dispositivos usam o mesmo relay e gere um novo código QR.",
     cameraPermissionsRequiredToScanQr:
       "Permissões de câmera são necessárias para escanear códigos QR",
     qrScannerUnavailable:

@@ -1,5 +1,7 @@
 import type { SocketRpcAuthorizationContext } from '@happier-dev/protocol/rpc';
 
+export const DEFAULT_SERVER_SCOPED_RPC_TIMEOUT_MS = 30_000;
+
 export type SocketRpcResult<T = string> =
     | { ok: true; result: T }
     | { ok: false; error?: string; errorCode?: string };
@@ -62,6 +64,10 @@ export type ScopedSocketConnectParams = Readonly<{
     serverUrl: string;
     token: string;
     timeoutMs: number;
+    /** One-shot OS task connection, independent of foreground pooling/pause. */
+    networkMode?: 'background-task';
+    /** Owns a one-shot background socket through connection and RPC preparation. */
+    signal?: AbortSignal;
 }>;
 
 export type ScopedSocketClient = Readonly<{

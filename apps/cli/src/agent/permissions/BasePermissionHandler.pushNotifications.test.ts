@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   accountSettingsParse,
+  SESSION_RPC_METHODS,
   deriveSettingsSecretsKeyV1,
   encryptSecretStringV1,
 } from '@happier-dev/protocol';
 
 import { BasePermissionHandler, type PermissionResult } from './BasePermissionHandler';
 import { SessionPermissionRpcRouter } from './sessionPermissionRpcRouter';
+import type { ApiSessionClient } from '@/api/session/sessionClient';
 
 class FakeRpcHandlerManager {
   handlers = new Map<string, (payload: any) => any>();
@@ -19,6 +21,10 @@ class FakeRpcHandlerManager {
 class FakeSession {
   sessionId = 'session-test';
   rpcHandlerManager = new FakeRpcHandlerManager();
+  private permissionRpcRouter: SessionPermissionRpcRouter | null = null;
+  getOrCreatePermissionRpcRouter(): SessionPermissionRpcRouter {
+    return this.permissionRpcRouter ??= new SessionPermissionRpcRouter(this.rpcHandlerManager);
+  }
   agentState: any = { requests: {}, completedRequests: {} };
   metadata: any = {
     flavor: 'codex',
@@ -57,6 +63,20 @@ class TestPermissionHandler extends BasePermissionHandler {
 }
 
 describe('BasePermissionHandler push notifications', () => {
+  it('does not release a current provider waiter for an older notification occurrence', async () => {
+    const session = new FakeSession();
+    const router = new SessionPermissionRpcRouter(session.rpcHandlerManager);
+    Object.assign(session, { getOrCreatePermissionRpcRouter: () => router });
+    // The session fixture implements the RPC/state boundary exercised by this handler.
+    const handler = new TestPermissionHandler(session as unknown as ApiSessionClient);
+    const pending = handler.request('same', 'Write', { path: '/current' });
+    const occurrenceId = session.agentState.requests.same.occurrenceId;
+    const respond = session.rpcHandlerManager.handlers.get(SESSION_RPC_METHODS.SESSION_PERMISSION_RESPOND_TO_OCCURRENCE_V1);
+    await expect(respond?.({ id: 'same', occurrenceId: 'old', approved: true })).resolves.toMatchObject({ ok: false });
+    expect(session.agentState.requests.same.occurrenceId).toBe(occurrenceId);
+    await expect(respond?.({ id: 'same', occurrenceId, approved: false, decision: 'denied' })).resolves.toEqual({ ok: true });
+    await expect(pending).resolves.toMatchObject({ decision: 'denied' });
+  });
   afterEach(() => {
     vi.restoreAllMocks();
   });
