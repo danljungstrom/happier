@@ -3,6 +3,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { act } from 'react-test-renderer';
 import type { PermissionMode, ModelMode } from '@/sync/domains/permissions/permissionTypes';
 import type { Settings } from '@/sync/domains/settings/settings';
+import { localSettingsDefaults } from '@/sync/domains/settings/localSettings';
+import { purchasesDefaults } from '@/sync/domains/purchases/purchases';
+import { profileDefaults } from '@/sync/domains/profiles/profile';
 import type { UseMachineEnvPresenceResult } from '@/hooks/machine/useMachineEnvPresence';
 import { SPAWN_SESSION_ERROR_CODES, type SpawnSessionErrorDetail } from '@happier-dev/protocol';
 import { flushHookEffects, renderHook } from '@/dev/testkit';
@@ -158,10 +161,10 @@ async function createHarness() {
         saveSettings: vi.fn(),
         loadPendingSettings: () => ({}),
         savePendingSettings: vi.fn(),
-        loadLocalSettings: () => ({}),
+        loadLocalSettings: () => ({ ...localSettingsDefaults }),
         saveLocalSettings: vi.fn(),
         loadThemePreference: () => 'adaptive',
-        loadPurchases: () => ({}),
+        loadPurchases: () => ({ ...purchasesDefaults }),
         savePurchases: vi.fn(),
         loadSessionDrafts: () => ({}),
         saveSessionDrafts: vi.fn(),
@@ -191,7 +194,7 @@ async function createHarness() {
         saveChangesCursor: vi.fn(),
         loadLastChangesCursorByAccountId: () => ({}),
         saveLastChangesCursorByAccountId: vi.fn(),
-        loadProfile: () => ({}),
+        loadProfile: () => ({ ...profileDefaults }),
         saveProfile: vi.fn(),
         clearPersistence: vi.fn(),
       },
