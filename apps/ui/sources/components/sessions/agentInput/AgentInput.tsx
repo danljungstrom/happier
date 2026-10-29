@@ -3026,7 +3026,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             <AgentInputAttachmentsRow
                 attachments={props.attachments ?? []}
                 composerBadges={composerAttachmentBadges}
-                removeDisabled={props.disabled === true}
+                disabled={props.disabled === true}
             />
         );
 
